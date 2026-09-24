@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Collaboration Contract · IT:U</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+<script src="config.js"></script>
+<script src="cloud.js"></script>
+<style>
+.cloudbar{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;
+  padding:6px 12px;font:600 .8rem Inter,sans-serif;background:var(--bg-container);color:var(--text-main);border-top:2px solid var(--border);}
+.cloudbar button{padding:4px 10px;font-size:.8rem;margin:0}
+body.cloud{padding-bottom:48px}
+@media print{.cloudbar{display:none}}
+</style>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   IT:U PALETTE — edit these to match the official IT:U brand book.
+   Only these few variables control the whole colour scheme.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --itu-accent:#4a2fe0;   /* ← IT:U primary accent (replace with brand hex) */
+  --itu-accent-2:#1f8a70; /* ← secondary accent (replace with brand hex)   */
+  --itu-ink:#141414;      /* ← structural black                            */
+
+  --bg-body:#f2efe6; --bg-container:#ffffff; --text-main:var(--itu-ink);
+  --border:var(--itu-ink); --accent:var(--itu-accent); --accent-2:var(--itu-accent-2);
+  --danger:#b5333a; --muted:#6b6459; --field:#faf8f2;
+}
+[data-theme="dark"]{
+  --bg-body:#0d0f14; --bg-container:#161a21; --text-main:#ece9e1;
+  --border:#ece9e1; --accent:#9a83ff; --accent-2:#5cc6a8; --danger:#e06b6b; --muted:#9a9385; --field:#10141b;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg-body); color:var(--text-main); margin:0; padding:22px;
+  font-family:'VT323',monospace; font-size:1.4rem; min-height:100vh;
+  display:flex; justify-content:center; align-items:flex-start; transition:background .3s,color .3s;
+}
+.wrap{width:100%; max-width:860px;}
+.container{
+  background:var(--bg-container); border:6px solid var(--border);
+  box-shadow:10px 10px 0 rgba(0,0,0,.18); padding:34px 34px 30px; position:relative; margin-bottom:20px;
+}
+h1{font-family:'VT323',monospace; font-size:3.6rem; line-height:.9; text-transform:uppercase; margin:0 0 6px; color:var(--accent); text-shadow:2px 2px 0 rgba(0,0,0,.12);}
+h2{font-family:'VT323',monospace; font-size:2.3rem; text-transform:uppercase; margin:0 0 8px; color:var(--text-main);}
+h3{font-family:'VT323',monospace; font-size:1.7rem; color:var(--accent); margin:0 0 4px;}
+p{font-size:1.3rem; line-height:1.35; margin:0 0 14px;}
+.body-txt{font-family:'Inter',sans-serif; font-size:1rem; line-height:1.5;}
+.kick{font-family:'VT323',monospace; font-size:1.2rem; letter-spacing:1px; text-transform:lowercase; color:var(--accent);}
+.muted{color:var(--muted);} a{color:var(--accent); font-weight:bold;}
+.wordmark{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+.wordmark .name{font-size:1.3rem; text-transform:uppercase; letter-spacing:1px;}
+.wordmark .name b{color:var(--accent);}
+.badge-tag{font-family:'VT323',monospace; font-size:1.1rem; padding:1px 10px; border:3px solid var(--border); background:var(--field); text-transform:uppercase;}
+label.fld{display:block; font-family:'Inter',sans-serif; font-weight:600; font-size:.92rem; margin:14px 0 5px;}
+input[type=text], textarea, select{
+  width:100%; padding:10px 12px; background:var(--field); color:var(--text-main); border:4px solid var(--border);
+  font-family:'Inter',sans-serif; font-size:1rem; border-radius:0;}
+input[type=text]:focus, textarea:focus{outline:none; border-color:var(--accent);}
+textarea{min-height:80px; resize:vertical;}
+button{
+  font-family:'VT323',monospace; font-size:1.5rem; text-transform:uppercase; cursor:pointer; padding:9px 22px;
+  border:4px solid var(--border); background:var(--accent); color:#fff; box-shadow:6px 6px 0 var(--border);
+  transition:.08s; margin:6px 8px 6px 0; border-radius:0;}
+button:active{box-shadow:0 0 0 var(--border); transform:translate(6px,6px);}
+button:disabled{background:#9a9a9a; border-color:#777; box-shadow:6px 6px 0 #777; cursor:not-allowed;}
+button.ghost{background:var(--bg-container); color:var(--text-main);}
+button.alt{background:var(--accent-2);} button.danger{background:var(--danger);}
+.hidden{display:none !important;}
+.info{font-family:'Inter',sans-serif; font-size:.95rem; background:var(--field); border:3px dashed var(--border);
+  padding:12px 14px; margin:14px 0; color:var(--muted);}
+/* stepper */
+.steps{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px;}
+.steps span{font-family:'VT323',monospace; font-size:1.15rem; padding:3px 11px; border:3px solid var(--border); color:var(--muted); background:var(--field);}
+.steps span.on{background:var(--accent); color:#fff;} .steps span.done{background:var(--accent-2); color:#fff;}
+/* members */
+.member{display:flex; align-items:center; gap:12px; padding:12px 14px; border:3px solid var(--border); background:var(--field); margin-bottom:10px; flex-wrap:wrap;}
+.member .av{width:32px; height:32px; border:3px solid var(--border); background:var(--accent); color:#fff; display:grid; place-items:center; font-size:1.1rem; flex:none;}
+.grow{flex:1 1 200px;}
+.chk{display:inline-flex; align-items:center; gap:8px; font-family:'Inter',sans-serif; font-size:.9rem; font-weight:600; cursor:pointer;}
+.chk input{width:22px; height:22px; accent-color:var(--accent);}
+.person{border:3px solid var(--border); padding:14px 16px; margin-bottom:14px; background:var(--field);}
+.person h3{display:flex; align-items:center; gap:10px;}
+.range-wrap{display:flex; align-items:center; gap:14px;}
+input[type=range]{flex:1; accent-color:var(--accent);}
+.range-val{font-family:'VT323',monospace; font-size:1.8rem; color:var(--accent); min-width:44px;}
+.chips{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0;}
+.chip{cursor:pointer; user-select:none; font-family:'VT323',monospace; font-size:1.15rem; padding:4px 12px; border:3px solid var(--border); background:var(--field);}
+.chip.on{background:var(--accent); color:#fff;}
+/* Team Canvas overview */
+.canvas{display:grid; gap:6px; grid-template-columns:repeat(4,1fr);
+  grid-template-areas:
+   "people goals values rules"
+   "people personal purpose rules"
+   "people personal needs rules"
+   "strengths strengths risks risks";}
+.cv{border:3px solid var(--border); background:var(--field); padding:11px 12px; min-height:98px;}
+.cv h4{font-family:'VT323',monospace; font-size:1.3rem; text-transform:uppercase; color:var(--accent); margin:0 0 6px;}
+.cv .txt{font-family:'Inter',sans-serif; font-size:.82rem; line-height:1.4; white-space:pre-wrap;}
+.cv.people{grid-area:people} .cv.goals{grid-area:goals} .cv.values{grid-area:values}
+.cv.rules{grid-area:rules} .cv.personal{grid-area:personal} .cv.needs{grid-area:needs}
+.cv.strengths{grid-area:strengths} .cv.risks{grid-area:risks}
+.cv.purpose{grid-area:purpose; border-color:var(--accent-2);}
+.cv.purpose h4{color:var(--accent-2);}
+/* about canvas figure */
+.tc-figure{border:4px solid var(--border); padding:14px; background:var(--field); margin:12px 0 6px;}
+.tc-figure svg{width:100%; height:auto; display:block;}
+figcaption{font-family:'Inter',sans-serif; font-size:.78rem; color:var(--muted); margin-top:8px;}
+/* theme toggle */
+.theme-btn{position:absolute; top:16px; right:18px; background:none; border:none; box-shadow:none; font-size:1.7rem; padding:0; margin:0; cursor:pointer;}
+.theme-btn:active{transform:scale(.9); box-shadow:none;}
+/* footer / credits */
+.footer{font-family:'Inter',sans-serif; font-size:.82rem; color:var(--muted); line-height:1.6; border-top:3px solid var(--border); padding-top:14px; margin-top:18px;}
+.footer a{color:var(--accent);} .footer b{color:var(--text-main);}
+.credits div{margin-bottom:8px;}
+/* badge preview */
+#badgePreview canvas{width:100%; max-width:520px; display:block; margin:0 auto; border:4px solid var(--border); box-shadow:8px 8px 0 rgba(0,0,0,.15);}
+/* consent modal */
+#consent{position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:99; display:flex; align-items:center; justify-content:center; padding:18px;}
+.consent-box{background:var(--bg-container); border:6px solid var(--border); box-shadow:10px 10px 0 rgba(0,0,0,.5); max-width:660px; max-height:88vh; overflow:auto; padding:28px;}
+.consent-box .body-txt{margin-bottom:12px;}
+@media(max-width:760px){
+  body{padding:12px; font-size:1.2rem;} .container{padding:20px 16px; border-width:4px;}
+  h1{font-size:2.4rem;} h2{font-size:1.7rem;}
+  .canvas{grid-template-columns:1fr; grid-template-areas:
+   "people""goals""personal""purpose""values""needs""rules""strengths""risks";}
+}
+@media print{
+  body{padding:0; background:#fff;} .noprint{display:none !important;}
+  .container{border:2px solid #000; box-shadow:none;} .cv{border:2px solid #000;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===== CONSENT MODAL ===== -->
+<div id="consent">
+  <div class="consent-box">
+    <h2>Participant Consent</h2>
+    <p class="body-txt">By completing the <strong>Collaboration Contract</strong> you agree that we may collect and
+      process your responses for research on how student groups form and collaborate. Participation is
+      <strong>voluntary</strong>. You must be at least <strong>18 years old</strong> to take part. You can withdraw
+      at any time, without giving reasons and without any disadvantage.</p>
+    <p class="body-txt">Your data is stored securely and used <strong>for research purposes only</strong>. All data
+      will be <strong>anonymised</strong> before analysis and publication. Collected data includes your responses, the
+      time you spend on each section, and edit activity. Anonymised data may be published on OSF/Zenodo under a CC-BY
+      licence. Each group member consents individually on the next screen.</p>
+    <p class="body-txt muted">Contact person: <strong>Marjorie Cristina Da Cruz</strong> ·
+      <a href="mailto:marjorie.da-cruz@it-u.at">marjorie.da-cruz@it-u.at</a></p>
+    <button onclick="closeConsent()">I understand — continue</button>
+  </div>
+</div>
+
+<!-- ===== LOGIN (cloud mode only) ===== -->
+<section id="screen-auth" class="container hidden">
+  <button class="theme-btn noprint" onclick="toggleTheme()" title="Toggle theme">◐</button>
+  <div class="wordmark"><span class="name">:<b>collaboration_contract</b></span><span class="badge-tag">IT:U</span></div>
+  <p class="kick">:sign in</p>
+  <h1>Collaboration<br>Contract</h1>
+  <p class="body-txt muted">Sign in with your university e-mail. Your group's contract is saved online, so you can
+    come back to it from any device.</p>
+  <label class="fld">E-mail</label><input id="authEmail" type="email" autocomplete="email" placeholder="name@it-u.at">
+  <label class="fld">Password</label><input id="authPw" type="password" autocomplete="current-password" placeholder="min. 8 characters"
+    onkeydown="if(event.key==='Enter')CLOUD.signIn()">
+  <div style="margin-top:16px">
+    <button class="alt" onclick="CLOUD.signIn()">Sign in ▸</button>
+    <button class="ghost" onclick="CLOUD.signUp()">Create account</button>
+  </div>
+  <p class="body-txt muted" style="margin-top:10px">First time here? Type your e-mail and choose a password, then click
+    <b>Create account</b>. Forgot your password? Ask your teacher to reset it.</p>
+  <p id="authMsg" class="body-txt" style="font-weight:600"></p>
+</section>
+
+<!-- ===== JOIN GROUP (cloud mode only) ===== -->
+<section id="screen-join" class="container hidden">
+  <button class="theme-btn noprint" onclick="toggleTheme()" title="Toggle theme">◐</button>
+  <p class="kick">:your group</p>
+  <h2>Join your group</h2>
+  <p class="body-txt muted">Enter the group code you received from your teacher. Everyone in the team uses the same code
+    and works on the same contract.</p>
+  <label class="fld">Group code</label>
+  <input id="joinCode" type="text" placeholder="e.g. PBL101-03-K7F2" style="text-transform:uppercase"
+    onkeydown="if(event.key==='Enter')CLOUD.join()">
+  <label class="chk" style="margin-top:14px;display:block"><input id="joinConsent" type="checkbox"> I am 18+ and I consent
+    to the research use described in the information sheet.</label>
+  <div style="margin-top:16px"><button class="alt" onclick="CLOUD.join()">Join group ▸</button></div>
+  <div id="createBox" class="hidden" style="margin-top:28px">
+    <p class="kick">:or start a new group</p>
+    <label class="fld">Group name</label><input id="newGroupName" type="text" placeholder="e.g. Team Aurora">
+    <div style="margin-top:12px"><button class="ghost" onclick="CLOUD.create()">+ Create group and get a code</button></div>
+  </div>
+  <p id="joinMsg" class="body-txt" style="font-weight:600"></p>
+</section>
+
+<!-- ===== WELCOME ===== -->
+<section id="screen-welcome" class="container">
+  <button class="theme-btn noprint" onclick="toggleTheme()" title="Toggle theme">◐</button>
+  <div class="wordmark"><span class="name">:<b>collaboration_contract</b></span><span class="badge-tag">IT:U</span></div>
+  <p class="kick">:project-based learning</p>
+  <h1>Collaboration<br>Contract</h1>
+  <p class="body-txt muted">A digital team canvas for the start of your project. Reflect together, agree how you will
+    work, and leave with a contract you can return to — plus a badge to mark it.</p>
+  <div class="info">Six short conversations: who you are, what you can do, how far you will go, why your group
+    exists (your purpose), what a good group means, and what good group work looks like.
+    Based on Holgaard et al. (2021).</div>
+  <button class="alt" onclick="go('setup')">Set up your group ▸</button>
+  <button class="ghost" onclick="go('about')">What is this? ▸</button>
+</section>
+
+<!-- ===== ABOUT ===== -->
+<section id="screen-about" class="container hidden">
+  <button class="theme-btn noprint" onclick="toggleTheme()">◐</button>
+  <p class="kick">:the idea</p>
+  <h2>The collaboration contract</h2>
+  <p class="body-txt">When a new group forms, most friction later comes from things never said at the start: what we
+    each expect, how much time we will give, how we will decide, what we do when we disagree. A
+    <strong>collaboration contract</strong> is a short, structured conversation that surfaces those things early — and
+    writes them down so the group can hold itself to them.</p>
+  <p class="body-txt">This tool follows the five reflective questions of <strong>Holgaard et al. (2021)</strong> and
+    maps them onto the <a href="https://theteamcanvas.com/" target="_blank" rel="noopener">Team Canvas</a>, a one-page
+    picture of a team. You move through the questions together; the app assembles your answers into the canvas below,
+    which becomes your contract.</p>
+  <p class="kick" style="margin-top:20px">:the team canvas</p>
+  <figure class="tc-figure">
+    <!-- Team Canvas recreated as original artwork (layout CC BY-SA 4.0, Ivanov & Voloshchuk) -->
+    <svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Team Canvas layout">
+      <style>
+        .b{fill:var(--bg-container); stroke:var(--border); stroke-width:2;}
+        .t{font-family:'VT323',monospace; font-size:12px; fill:var(--accent); text-transform:uppercase;}
+        .q{font-family:'Inter',sans-serif; font-size:7px; fill:var(--muted);}
+        .p{fill:var(--field); stroke:var(--accent-2); stroke-width:2.5;}
+      </style>
+      <rect x="2" y="2" width="676" height="396" fill="var(--field)" stroke="var(--border)" stroke-width="2"/>
+      <rect class="b" x="12" y="12" width="150" height="300"/>
+      <text class="t" x="20" y="30">people &amp; roles</text>
+      <text class="q" x="20" y="46">Our names and the roles in the team.</text>
+      <rect class="b" x="170" y="12" width="150" height="120"/>
+      <text class="t" x="178" y="30">common goals</text>
+      <text class="q" x="178" y="46">What we want to achieve together.</text>
+      <rect class="b" x="328" y="12" width="150" height="120"/>
+      <text class="t" x="336" y="30">values</text>
+      <text class="q" x="336" y="46">What we stand for, with examples.</text>
+      <rect class="b" x="486" y="12" width="182" height="300"/>
+      <text class="t" x="494" y="30">rules &amp; activities</text>
+      <text class="q" x="494" y="46">How we communicate, decide, execute.</text>
+      <rect class="b" x="170" y="140" width="120" height="172"/>
+      <text class="t" x="178" y="158">personal goals</text>
+      <text class="q" x="178" y="174">Individual goals and agendas.</text>
+      <rect class="b p" x="298" y="150" width="60" height="60" rx="30"/>
+      <text class="t" x="328" y="176" text-anchor="middle" style="fill:var(--accent-2)">purpose</text>
+      <text class="q" x="328" y="190" text-anchor="middle" style="fill:var(--accent-2)">why we are here</text>
+      <rect class="b" x="366" y="140" width="112" height="172"/>
+      <text class="t" x="374" y="158">needs</text>
+      <text class="q" x="374" y="174">What each needs to be at our best.</text>
+      <rect class="b" x="12" y="320" width="330" height="68"/>
+      <text class="t" x="20" y="338">strengths &amp; assets</text>
+      <text class="q" x="20" y="354">Skills and strengths we have, individually and as a team.</text>
+      <rect class="b" x="350" y="320" width="318" height="68"/>
+      <text class="t" x="358" y="338">weaknesses &amp; risks</text>
+      <text class="q" x="358" y="354">Weaknesses, blind spots and obstacles ahead.</text>
+    </svg>
+    <figcaption>Team Canvas by Alexey Ivanov &amp; Dmitry Voloshchuk (theteamcanvas.com), CC BY-SA 4.0 — recreated and
+      adapted under the same licence.</figcaption>
+  </figure>
+  <div style="margin-top:16px">
+    <button class="alt" onclick="go('setup')">Set up your group ▸</button>
+    <button class="ghost" onclick="go('welcome')">◂ Back</button>
+  </div>
+</section>
+
+<!-- ===== SETUP ===== -->
+<section id="screen-setup" class="container hidden">
+  <button class="theme-btn noprint" onclick="toggleTheme()">◐</button>
+  <p class="kick">:your group</p>
+  <h2>Who is in the team?</h2>
+  <div style="display:flex; gap:14px; flex-wrap:wrap;">
+    <div class="grow"><label class="fld">Group name</label><input id="groupName" type="text" placeholder="e.g. Team Aurora" oninput="save()"></div>
+    <div class="grow local-only"><label class="fld">Cohort</label><input id="cohort" type="text" placeholder="WS2026" oninput="save()"></div>
+    <div class="grow local-only"><label class="fld">Course</label><input id="course" type="text" placeholder="PBL101" oninput="save()"></div>
+  </div>
+  <label class="fld" style="margin-top:20px">Members &amp; consent</label>
+  <p class="body-txt muted local-only" style="margin-top:0">Add each member. Everyone ticks their own consent box — the contract
+    can start only when all added members have consented.</p>
+  <div id="members"></div>
+  <div class="info cloud-only hidden">Teammates appear here once they sign in and enter your group code
+    <b class="groupcode"></b>. <button class="ghost" onclick="CLOUD.reload()">↻ Refresh</button></div>
+  <div class="member local-only" style="border-style:dashed;">
+    <input id="newName" class="grow" type="text" placeholder="Member name" onkeydown="if(event.key==='Enter')addMember()">
+    <label class="chk"><input id="newConsent" type="checkbox"> I am 18+ and I consent</label>
+    <button class="ghost" onclick="addMember()">+ Add</button>
+  </div>
+  <div style="margin-top:16px">
+    <button class="ghost" onclick="go('welcome')">◂ Back</button>
+    <button id="startBtn" class="alt" disabled onclick="startContract()">Start contract ▸</button>
+  </div>
+</section>
+
+<!-- ===== STEPS ===== -->
+<section id="screen-steps" class="container hidden">
+  <button class="theme-btn noprint" onclick="toggleTheme()">◐</button>
+  <div class="steps" id="stepbar"></div>
+  <div id="stepBody"></div>
+  <div style="margin-top:18px">
+    <button class="ghost" id="prevBtn" onclick="prevStep()">◂ Back</button>
+    <button id="nextBtn" class="alt" onclick="nextStep()">Save &amp; continue ▸</button>
+  </div>
+</section>
+
+<!-- ===== CANVAS ===== -->
+<section id="screen-canvas" class="container hidden">
+  <button class="theme-btn noprint" onclick="toggleTheme()">◐</button>
+  <p class="kick">:the contract</p>
+  <h2>Your team canvas <span id="doneTag" class="badge-tag hidden" style="border-color:var(--accent-2);color:var(--accent-2)">✓ complete</span></h2>
+  <p class="body-txt muted noprint">This is your living contract. Review it together, then finish to export and get your badge.</p>
+  <div class="canvas" id="canvasGrid"></div>
+  <div style="margin-top:18px" class="noprint">
+    <button class="ghost" onclick="go('steps')">◂ Edit sections</button>
+    <button class="ghost" onclick="window.print()">Print / Save PDF</button>
+    <button class="alt" onclick="finish()">Finish &amp; export ▸</button>
+  </div>
+</section>
+
+<!-- ===== DONE ===== -->
+<section id="screen-done" class="container hidden">
+  <button class="theme-btn noprint" onclick="toggleTheme()">◐</button>
+  <p class="kick">:congratulations</p>
+  <h2>Your contract is ready 🎉</h2>
+  <p class="body-txt muted">Your group now shares a collaboration contract. Download it, grab your badge, and revisit
+    it whenever you need to realign.</p>
+  <div id="badgePreview" style="margin:18px 0"></div>
+  <button class="alt" onclick="downloadBadge()">↓ Download group badge (PNG)</button>
+  <button class="ghost" onclick="exportContract()">↓ Contract (JSON)</button>
+  <button class="ghost" onclick="go('canvas')">View / print canvas</button>
+  <div class="info cloud-only hidden" style="margin-top:20px">Your contract is saved online. Any member can sign in
+    again later to review or update it.</div>
+  <div class="info local-only" style="margin-top:20px"><b>Pilot mode.</b> No server is configured, so research telemetry is
+    buffered on this device only. Open the <a href="analysis.html">Data Console</a> to analyse it in-browser, or export
+    the JSON below to import there from another device.</div>
+  <button class="ghost" onclick="exportData()">↓ Research data (JSON)</button>
+  <button class="ghost" onclick="location.href='analysis.html'">⊞ Open Data Console</button>
+  <button class="ghost danger local-only" onclick="resetAll()">↺ New contract</button>
+
+  <div class="footer">
+    <p class="kick">:credits &amp; licence</p>
+    <div class="credits">
+      <div><b>Team Canvas</b> — Alexey Ivanov &amp; Dmitry Voloshchuk (<a href="https://theteamcanvas.com/" target="_blank" rel="noopener">theteamcanvas.com</a>), CC BY-SA 4.0.</div>
+      <div><b>Reflective questions</b> — Holgaard, J. E., et al. (2021).</div>
+      <div><b>Interface design</b> — retro interface adapted (modified) from <i>Guess the Replication</i> by Lukas Röseler &amp; Jasmin Röseler (FORRT Open Research Games), licensed <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> · <a href="https://lukasroeseler.github.io/GuessTheReplication/" target="_blank" rel="noopener">source</a>.</div>
+      <div><b>Data &amp; privacy architecture</b> — the PBL Board Game “The Dachstein Ascent”, IT:U.</div>
+      <div>Built with <b>Claude</b> (Anthropic).</div>
+      <div style="margin-top:6px">This adaptation is shared under <b>CC BY-SA 4.0</b> (required by the Team Canvas licence) — see the <b>LICENSE</b> file. Contact: <b>Marjorie Cristina Da Cruz</b> · <a href="mailto:marjorie.da-cruz@it-u.at">marjorie.da-cruz@it-u.at</a></div>
+    </div>
+  </div>
+</section>
+
+</div>
+<div class="cloudbar cloud-only hidden noprint">
+  <span class="whoami"></span><span>· group <b class="groupcode"></b></span>
+  <span id="cloudStatus" style="color:var(--accent-2)"></span>
+  <button class="ghost" onclick="CLOUD.reload()">↻</button>
+  <button class="ghost" onclick="CLOUD.signOut()">Sign out</button>
+</div>
+<script>
+/* ============ CONFIG ============ */
+const CONFIG = { endpoint:'', token:'', appVersion:'3.3.0', schemaVersion:4, deckVersion:'1.1' };
+const ACCENT_FALLBACK = '#4a2fe0';
+const VALUES = ["Trust","Respect","Open communication","Reliability","Accountability",
+  "Fairness","Inclusivity","Ambition","Curiosity","Mutual support","Honesty","Punctuality"];
+const STEPS     = ["Who are we","What can we do","How far","Our purpose","Good group","Good group work"];
+const STEP_KEYS = ["q1","q2","q3","purpose","q4","q5"];   // order of sections; purpose sits in the middle
+
+/* ============ STATE ============ */
+const _url = new URL(location.href);
+function newState(){ return {
+  sessionId: uuid(), startedAt: Date.now(),
+  groupName:"", cohort:_url.searchParams.get('cohort')||"", course:_url.searchParams.get('course')||"",
+  members:[], answers:{ q1:{}, purpose:"", q2:{}, q3:{shared:""}, q4:{values:[],examples:""}, q5:{comm:"",dec:"",conflict:"",needs:""} },
+  step:0, started:false, done:false
+}; }
+let S = load() || newState();
+let stepShownAt = Date.now();
+
+/* ============ PERSISTENCE ============ */
+function save(){ syncInputs(); localStorage.setItem('cc_state', JSON.stringify(S)); if(window.CLOUD) CLOUD.save(); }
+function load(){ try{ return JSON.parse(localStorage.getItem('cc_state')); }catch(e){ return null; } }
+function uuid(){ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:(r&0x3|0x8)).toString(16);}); }
+
+/* ============ TELEMETRY ============
+   Route 0 (pilot): events buffer in localStorage only.
+   Production: same buffer PLUS an outbox drained by flush() to the ingest
+   endpoint. The server dedupes on (sessionId, seq), so retries after an
+   offline period never double-count. Identity split happens server-side. */
+let seq = parseInt(localStorage.getItem('cc_seq')||'0',10);
+let flushing = false;
+function pushLocal(key, ev){ const b=JSON.parse(localStorage.getItem(key)||'[]'); b.push(ev); localStorage.setItem(key, JSON.stringify(b)); }
+function emit(event, payload={}){
+  seq++; localStorage.setItem('cc_seq', seq);
+  const ev = { event, sessionId:S.sessionId, seq, ts:new Date().toISOString(),
+    schemaVersion:CONFIG.schemaVersion, appVersion:CONFIG.appVersion, deckVersion:CONFIG.deckVersion,
+    cohort:S.cohort||null, course:S.course||null, groupName:S.groupName||null, ...payload };
+  pushLocal('cc_events', ev);   // full local log — export / pilot Data Console
+  pushLocal('cc_outbox', ev);   // send queue — drained by flush() in production
+  if(CONFIG.endpoint || window.CLOUD) flush();
+}
+// Batch-flush the outbox to the ingest endpoint. Safe to call anytime.
+async function flush(){
+  if(window.CLOUD) return CLOUD.flushEvents();
+  if(!CONFIG.endpoint || flushing) return;
+  const out = JSON.parse(localStorage.getItem('cc_outbox')||'[]');
+  if(!out.length) return;
+  flushing = true;
+  try{
+    const res = await fetch(CONFIG.endpoint, { method:'POST', keepalive:true,
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(out.map(e=>({ ...e, token:CONFIG.token }))) });
+    if(res.ok){
+      const sent = new Set(out.map(e=>e.seq));
+      const rest = JSON.parse(localStorage.getItem('cc_outbox')||'[]').filter(e=>!sent.has(e.seq));
+      localStorage.setItem('cc_outbox', JSON.stringify(rest));
+    }   // non-2xx (e.g. 403 bad token): keep the queue, do not drop unsent events
+  }catch(e){ /* offline — stay queued, retry on next emit / 'online' / pagehide */ }
+  finally{ flushing = false; }
+}
+if(typeof window!=='undefined') window.addEventListener('online', flush);
+function words(t){ return (t||"").trim().split(/\s+/).filter(Boolean).length; }
+function accent(){ return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || ACCENT_FALLBACK; }
+
+/* ============ NAVIGATION ============ */
+const screens = ["auth","join","welcome","about","setup","steps","canvas","done"];
+function go(name){
+  save();
+  screens.forEach(s=>document.getElementById('screen-'+s).classList.toggle('hidden', s!==name));
+  if(name==='setup') renderMembers();
+  if(name==='steps') renderStep();
+  if(name==='canvas') renderCanvas();
+  if(name==='done') renderBadgePreview();
+  window.scrollTo(0,0);
+}
+function closeConsent(){ document.getElementById('consent').classList.add('hidden'); }
+
+/* ============ THEME ============ */
+function toggleTheme(){
+  const d = document.documentElement.getAttribute('data-theme')==='dark';
+  document.documentElement.setAttribute('data-theme', d?'light':'dark');
+  localStorage.setItem('cc_theme', d?'light':'dark');
+  if(!document.getElementById('screen-done').classList.contains('hidden')) renderBadgePreview();
+}
+if(localStorage.getItem('cc_theme')==='dark') document.documentElement.setAttribute('data-theme','dark');
+
+/* ============ SETUP / MEMBERS ============ */
+function initials(n){ return (n||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+function addMember(){
+  const name = document.getElementById('newName').value.trim();
+  const consent = document.getElementById('newConsent').checked;
+  if(!name){ document.getElementById('newName').focus(); return; }
+  if(!consent){ alert('Please tick the consent box for this member.'); return; }
+  const m = { playerId:uuid(), name, consent:true, consentTs:new Date().toISOString() };
+  S.members.push(m);
+  emit('consent_ack', { playerId:m.playerId, consentVersion:'2.1' });
+  document.getElementById('newName').value=''; document.getElementById('newConsent').checked=false;
+  save(); renderMembers();
+}
+function removeMember(id){ S.members = S.members.filter(m=>m.playerId!==id); save(); renderMembers(); }
+function renderMembers(){
+  document.getElementById('groupName').value = S.groupName;
+  document.getElementById('cohort').value = S.cohort;
+  document.getElementById('course').value = S.course;
+  const box = document.getElementById('members'); box.innerHTML='';
+  S.members.forEach(m=>{
+    const d=document.createElement('div'); d.className='member';
+    d.innerHTML = `<span class="av">${esc(initials(m.name))}</span>
+      <strong class="grow">${esc(m.name)}</strong>
+      <span style="color:var(--accent-2);font-family:'Inter';font-size:.85rem;font-weight:700">✓ consented</span>
+      ${window.CLOUD?'':`<button class="ghost" onclick="removeMember('${m.playerId}')">Remove</button>`}`;
+    box.appendChild(d);
+  });
+  document.getElementById('startBtn').disabled = !(S.members.length>0 && S.members.every(m=>m.consent));
+}
+function startContract(){
+  syncInputs();
+  if(!S.started){ S.started=true;
+    emit('session_start', { playerCount:S.members.length, players:S.members.map(m=>({playerId:m.playerId})) });
+  }
+  save(); go('steps');
+}
+
+/* ============ STEPPER ============ */
+function renderStepbar(){
+  const bar=document.getElementById('stepbar'); bar.innerHTML='';
+  STEPS.forEach((t,i)=>{ const s=document.createElement('span'); s.textContent=(i+1)+'. '+t;
+    s.className = i===S.step?'on':(i<S.step?'done':''); bar.appendChild(s); });
+}
+function renderStep(){
+  renderStepbar(); stepShownAt=Date.now();
+  const b=document.getElementById('stepBody'); const a=S.answers;
+  const mem = S.members.length?S.members:[{playerId:'solo',name:'You'}];
+  const kick = ()=>`<p class="kick">:section ${S.step+1} / ${STEPS.length}</p>`;
+  let h='';
+  const K = STEP_KEYS[S.step];
+  if(K==='q1'){
+    h+=kick()+`<h2>Who are we?</h2>
+      <p class="body-txt muted">Each member notes the role they will play in the team. Personal goals come later, once you have agreed a shared goal. Your shared purpose follows right after that.</p>`;
+    mem.forEach(m=>{ const q=a.q1[m.playerId]||{};
+      h+=`<div class="person"><h3><span class="av">${esc(initials(m.name))}</span>${esc(m.name)}</h3>
+        <label class="fld">My role in the team</label><input type="text" data-q="q1" data-id="${m.playerId}" data-f="role" value="${esc(q.role||'')}">
+      </div>`; });
+  } else if(K==='q2'){
+    h+=kick()+`<h2>What can we do? What do we want and have to do?</h2>
+      <p class="body-txt muted">Discuss the strengths and weaknesses each of you brings to the team. Personal development goals come later, once the shared goal is set.</p>`;
+    mem.forEach(m=>{ const q=a.q2[m.playerId]||{};
+      h+=`<div class="person"><h3><span class="av">${esc(initials(m.name))}</span>${esc(m.name)}</h3>
+        <label class="fld">Strengths &amp; assets</label><textarea data-q="q2" data-id="${m.playerId}" data-f="str">${esc(q.str||'')}</textarea>
+        <label class="fld">Weaknesses &amp; risks</label><textarea data-q="q2" data-id="${m.playerId}" data-f="weak">${esc(q.weak||'')}</textarea>
+      </div>`; });
+  } else if(K==='q3'){
+    h+=kick()+`<h2>How far are we willing to go?</h2>
+      <p class="body-txt muted">Agree the shared goal first. Then, in light of that goal, each member sets how far they will go and what they personally want to get out of the project.</p>
+      <label class="fld">Our shared goal (feasible, measurable, time-bounded)</label>
+      <textarea data-q="q3s" data-f="shared" placeholder="One goal the whole team is working toward — specific, measurable, and time-bounded.">${esc(a.q3.shared||'')}</textarea>
+      <p class="kick" style="margin-top:24px">:personal goals — now that we know the shared goal</p>
+      <p class="body-txt muted" style="margin-top:0">Each member's own goals sit alongside the shared one, not inside it.</p>`;
+    mem.forEach(m=>{ const q=a.q3[m.playerId]||{}; const v=q.commit||3;
+      h+=`<div class="person"><h3><span class="av">${esc(initials(m.name))}</span>${esc(m.name)}</h3>
+        <label class="fld">Time &amp; energy I will commit (1–5)</label>
+        <div class="range-wrap"><input type="range" min="1" max="5" value="${v}" data-q="q3" data-id="${m.playerId}" data-f="commit"
+          oninput="this.parentNode.querySelector('.range-val').textContent=this.value+'/5'">
+          <span class="range-val">${v}/5</span></div>
+        <label class="fld">My personal goal — what I want to get out of this project</label><textarea data-q="q3" data-id="${m.playerId}" data-f="goal">${esc(q.goal||'')}</textarea>
+        <label class="fld">Areas I want to develop</label><input type="text" data-q="q3" data-id="${m.playerId}" data-f="dev" value="${esc(q.dev||'')}">
+        <label class="fld">In my own words (commitment)</label><input type="text" data-q="q3" data-id="${m.playerId}" data-f="note" value="${esc(q.note||'')}">
+      </div>`; });
+  } else if(K==='q4'){
+    h+=kick()+`<h2>What do we regard as a good project group?</h2>
+      <p class="body-txt muted">Map out your values, with concrete examples.</p>
+      <label class="fld">Pick the values that matter to your group</label><div class="chips">`;
+    VALUES.forEach(v=>{ const on=a.q4.values.includes(v);
+      h+=`<span class="chip ${on?'on':''}" data-val="${esc(v)}" onclick="toggleVal(this)">${esc(v)}</span>`; });
+    h+=`</div><label class="fld">Concrete examples — what does living these values look like for us?</label>
+        <textarea data-q="q4" data-f="examples">${esc(a.q4.examples||'')}</textarea>`;
+  } else if(K==='q5'){
+    h+=kick()+`<h2>What is good group work to us?</h2>
+      <p class="body-txt muted">Discuss how to promote a good working environment.</p>
+      <label class="fld">How we communicate &amp; keep everyone up to date</label><textarea data-q="q5" data-f="comm">${esc(a.q5.comm||'')}</textarea>
+      <label class="fld">How we make decisions</label><textarea data-q="q5" data-f="dec">${esc(a.q5.dec||'')}</textarea>
+      <label class="fld">How we handle conflicts &amp; disagreements</label><textarea data-q="q5" data-f="conflict">${esc(a.q5.conflict||'')}</textarea>
+      <label class="fld">What each of us needs to be at our best</label><textarea data-q="q5" data-f="needs">${esc(a.q5.needs||'')}</textarea>`;
+  } else if(K==='purpose'){
+    h+=kick()+`<h2>What is the purpose of our group?</h2>
+      <p class="body-txt muted">You now know who you are, what you can do, and the goal you share. Before you agree on values
+      and ways of working, discuss this question together and write one shared answer:</p>
+      <div class="info" style="font-size:1.05rem"><b>Why does this team exist?</b> What do we want to make possible together,
+      beyond the grade and beyond any single deliverable?</div>
+      <label class="fld">Our answer (one shared answer for the whole team)</label>
+      <textarea data-q="purpose" data-f="purpose" rows="4" placeholder="We are here because…">${esc(a.purpose||'')}</textarea>
+      <p class="body-txt muted" style="font-size:.9rem">Tip: you can come back and sharpen this after the next sections.</p>`;
+  }
+  b.innerHTML=h;
+  document.getElementById('prevBtn').style.visibility = S.step===0?'hidden':'visible';
+  document.getElementById('nextBtn').textContent = S.step===STEPS.length-1 ? 'See canvas ▸' : 'Save & continue ▸';
+}
+function toggleVal(el){
+  const v=el.dataset.val, arr=S.answers.q4.values;
+  if(!arr.includes(v)){ arr.push(v); el.classList.add('on'); }
+  else { S.answers.q4.values = arr.filter(x=>x!==v); el.classList.remove('on'); }
+  save();
+}
+function syncInputs(){
+  const gn=document.getElementById('groupName');
+  if(gn && !document.getElementById('screen-setup').classList.contains('hidden')){
+    S.groupName=gn.value; S.cohort=document.getElementById('cohort').value; S.course=document.getElementById('course').value;
+  }
+  document.querySelectorAll('#stepBody [data-q]').forEach(el=>{
+    const q=el.dataset.q, f=el.dataset.f, id=el.dataset.id, val=el.value;
+    if(q==='q1'||q==='q2'||q==='q3'){ S.answers[q][id]=S.answers[q][id]||{}; S.answers[q][id][f]=val; }
+    else if(q==='q3s'){ S.answers.q3.shared=val; }
+    else if(q==='purpose'){ S.answers.purpose=val; }
+    else if(q==='q4'){ S.answers.q4[f]=val; }
+    else if(q==='q5'){ S.answers.q5[f]=val; }
+  });
+}
+function stepWordCount(){ let w=0; document.querySelectorAll('#stepBody textarea, #stepBody input[type=text]').forEach(el=>w+=words(el.value)); return w; }
+function nextStep(){
+  const K = STEP_KEYS[S.step];
+  emit('section_saved', { section:K, sectionIndex:S.step+1, sectionName:STEPS[S.step],
+    dwellMs:Date.now()-stepShownAt, wordCount:stepWordCount(), values:(K==='q4'?S.answers.q4.values.length:undefined) });
+  syncInputs(); save();
+  if(S.step<STEPS.length-1){ S.step++; renderStep(); window.scrollTo(0,0); }
+  else { renderCanvas(); go('canvas'); }
+}
+function prevStep(){ syncInputs(); save(); if(S.step>0){ S.step--; renderStep(); window.scrollTo(0,0); } }
+
+/* ============ CANVAS ============ */
+function renderCanvas(){
+  const a=S.answers, mem=S.members.length?S.members:[{playerId:'solo',name:'You'}];
+  const people = mem.map(m=>{const q=a.q1[m.playerId]||{}; return `• ${m.name}${q.role?' — '+q.role:''}`;}).join('\n');
+  const personal = mem.map(m=>{const q=a.q3[m.playerId]||{}; const parts=[q.goal,q.dev?('develop: '+q.dev):''].filter(Boolean).join('; '); return parts?`• ${m.name}: ${parts}`:'';}).filter(Boolean).join('\n');
+  const strengths = mem.map(m=>{const q=a.q2[m.playerId]||{}; return q.str?`• ${m.name}: ${q.str}`:'';}).filter(Boolean).join('\n');
+  const risks = mem.map(m=>{const q=a.q2[m.playerId]||{}; return q.weak?`• ${m.name}: ${q.weak}`:'';}).filter(Boolean).join('\n');
+  const commit = mem.map(m=>{const q=a.q3[m.playerId]||{}; return `• ${m.name}: ${q.commit||'-'}/5${q.note?' — '+q.note:''}`;}).join('\n');
+  const goals = (a.q3.shared||'') + (commit?('\n\nCommitment:\n'+commit):'');
+  const values = a.q4.values.map(v=>'• '+v).join('\n') + (a.q4.examples?('\n\nExamples: '+a.q4.examples):'');
+  const rules = [a.q5.comm?('Communication: '+a.q5.comm):'', a.q5.dec?('Decisions: '+a.q5.dec):''].filter(Boolean).join('\n\n');
+  const needs = [a.q5.needs?('Needs: '+a.q5.needs):'', a.q5.conflict?('Conflict: '+a.q5.conflict):''].filter(Boolean).join('\n\n');
+  const cells = [
+    ['people','People & Roles',people],['goals','Common Goals',goals],['values','Values',values],
+    ['rules','Rules & Activities',rules],['personal','Personal Goals',personal],
+    ['purpose','Purpose',a.purpose||''],
+    ['needs','Needs & Expectations',needs],['strengths','Strengths & Assets',strengths],['risks','Weaknesses & Risks',risks],
+  ];
+  document.getElementById('canvasGrid').innerHTML = cells.map(c=>
+    `<div class="cv ${c[0]}"><h4>${c[1]}</h4><div class="txt">${esc(c[2])||'<span style=\"color:var(--muted)\">—</span>'}</div></div>`).join('');
+  document.getElementById('doneTag').classList.toggle('hidden', !S.done);
+}
+
+/* ============ FINISH / EXPORT ============ */
+function finish(){
+  syncInputs();
+  if(!S.done){ S.done=true;
+    let total=0; JSON.parse(localStorage.getItem('cc_events')||'[]').filter(e=>e.event==='section_saved').forEach(e=>total+=(e.dwellMs||0));
+    const mem = S.members.length?S.members:[{playerId:'solo'}];
+    const commitment={}; mem.forEach(m=>{ const q=S.answers.q3[m.playerId]||{}; if(q.commit) commitment[m.playerId]=+q.commit; });
+    // Content snapshot. Structured fields (values, commitment) survive anonymisation;
+    // `text` holds the free-text answers and is EXCLUDED from the default anon view
+    // server-side (see server/schema.sql v_events_anon). Keys are pseudonyms, never names.
+    emit('contract_complete', {
+      sectionsCompleted:STEPS.length, totalDwellMs:total,
+      values:S.answers.q4.values, valuesCount:S.answers.q4.values.length,
+      commitment,
+      text:{ purpose:S.answers.purpose, q1:S.answers.q1, q2:S.answers.q2, q3:S.answers.q3, q4:{examples:S.answers.q4.examples}, q5:S.answers.q5 }
+    });
+  }
+  save(); go('done');
+}
+function download(name, obj){
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u);
+}
+function exportContract(){
+  emit('contract_export',{});
+  download('collaboration-contract.json', { group:S.groupName, cohort:S.cohort, course:S.course,
+    members:S.members.map(m=>({name:m.name})), answers:S.answers, exportedAt:new Date().toISOString() });
+}
+function exportData(){ download('cc-research-data.json', { sessionId:S.sessionId, events:JSON.parse(localStorage.getItem('cc_events')||'[]') }); }
+function resetAll(){
+  if(!confirm('Start a completely new contract? This clears the current one on this device.')) return;
+  localStorage.removeItem('cc_state'); localStorage.removeItem('cc_events'); localStorage.removeItem('cc_seq'); location.reload();
+}
+
+/* ============ BADGE (retro style) ============ */
+function badgeCanvas(scale){
+  const W=1000,H=680; const c=document.createElement('canvas'); c.width=W*scale; c.height=H*scale;
+  const x=c.getContext('2d'); x.scale(scale,scale);
+  const dark = document.documentElement.getAttribute('data-theme')==='dark';
+  const ink = dark?'#ece9e1':'#141414', paper = dark?'#161a21':'#ffffff', acc = accent(), muted = dark?'#9a9385':'#6b6459';
+  const mono='"VT323","Courier New",monospace', sans='"Inter","Helvetica Neue",Arial,sans-serif';
+  x.fillStyle=paper; x.fillRect(0,0,W,H);
+  // hard offset shadow + thick border (retro)
+  x.fillStyle=ink; x.fillRect(46,46,W-72,H-72);
+  x.fillStyle=paper; x.fillRect(36,36,W-72,H-72);
+  x.strokeStyle=ink; x.lineWidth=6; x.strokeRect(36,36,W-72,H-72);
+  // header
+  x.textAlign='left'; x.fillStyle=acc; x.font='700 30px '+mono; x.fillText(':COLLABORATION_CONTRACT', 74, 104);
+  x.textAlign='right'; x.fillStyle=ink; x.font='700 30px '+mono; x.fillText('IT:U', W-74, 104);
+  x.strokeStyle=ink; x.lineWidth=3; x.beginPath(); x.moveTo(74,120); x.lineTo(W-74,120); x.stroke();
+  // seal
+  x.beginPath(); x.arc(W/2,214,52,0,Math.PI*2); x.fillStyle=acc; x.fill();
+  x.fillStyle='#fff'; x.font='700 48px '+sans; x.textAlign='center'; x.textBaseline='middle'; x.fillText('✓',W/2,216); x.textBaseline='alphabetic';
+  // title
+  x.fillStyle=muted; x.font='700 28px '+mono; x.textAlign='center'; x.fillText('CONTRACT COMPLETED', W/2, 312);
+  x.fillStyle=ink; x.font='700 60px '+mono; wrapCenter(x,(S.groupName||'Our Team').toUpperCase(),W/2,378,W-180,58);
+  // members
+  x.fillStyle=muted; x.font='500 19px '+sans; x.fillText('team canvas completed together by', W/2, 448);
+  x.fillStyle=ink; x.font='700 24px '+sans;
+  wrapCenter(x,(S.members.length?S.members.map(m=>m.name):['You']).join('   ·   '),W/2,484,W-160,32);
+  // meta
+  const d=new Date(); const meta=[S.course,S.cohort,d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})].filter(Boolean).join('   ·   ');
+  x.fillStyle=acc; x.font='700 22px '+mono; x.fillText(meta, W/2, H-104);
+  // footer attribution
+  x.fillStyle=muted; x.font='400 13px '+sans;
+  x.fillText('Team Canvas (Ivanov & Voloshchuk, CC BY-SA 4.0) · Questions: Holgaard et al. (2021) · Design: Guess the Replication (CC BY 4.0)', W/2, H-70);
+  return c;
+}
+function wrapCenter(x,text,cx,y,maxW,lh){
+  const wds=String(text).split(/\s+/); let line='',lines=[];
+  wds.forEach(w=>{ const t=line?line+' '+w:w; if(x.measureText(t).width>maxW && line){ lines.push(line); line=w; } else line=t; });
+  if(line) lines.push(line);
+  lines.slice(0,3).forEach((ln,i)=>x.fillText(ln,cx,y+i*lh));
+}
+function renderBadgePreview(){
+  try{ const c=badgeCanvas(1); const box=document.getElementById('badgePreview'); box.innerHTML=''; box.appendChild(c); }catch(e){}
+}
+function downloadBadge(){
+  emit('badge_download',{ members:S.members.length });
+  badgeCanvas(2).toBlob(b=>{ const u=URL.createObjectURL(b); const a=document.createElement('a');
+    a.href=u; a.download='collaboration-badge-'+(S.groupName||'team').replace(/\s+/g,'_')+'.png'; a.click(); URL.revokeObjectURL(u);
+  },'image/png');
+}
+
+/* ============ utils + boot ============ */
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+window.addEventListener('pagehide', ()=>{
+  if(S.started && !S.done) emit('save_exit',{ step:S.step });
+  // Last-chance delivery on unload — dedupe makes a possible duplicate harmless.
+  if(CONFIG.endpoint && navigator.sendBeacon){
+    const out = JSON.parse(localStorage.getItem('cc_outbox')||'[]');
+    if(out.length) navigator.sendBeacon(CONFIG.endpoint,
+      new Blob([JSON.stringify(out.map(e=>({ ...e, token:CONFIG.token })))], {type:'application/json'}));
+  }
+});
+function boot(){
+  if(window.CLOUD){
+    document.body.classList.add('cloud');
+    document.querySelectorAll('.cloud-only').forEach(e=>e.classList.remove('hidden'));
+    document.querySelectorAll('.local-only').forEach(e=>e.classList.add('hidden'));
+  }
+  renderMembers();
+  if(S.done){ go('done'); } else if(S.started){ go('steps'); } else if(S.members.length||S.groupName){ go('setup'); } else go('welcome');
+  if(CONFIG.endpoint || window.CLOUD) flush();   // deliver anything queued from a previous offline session
+}
+if(window.CLOUD){ go('auth'); CLOUD.start(); } else boot();
+</script>
+</body>
+</html>

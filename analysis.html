@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Collaboration Contract — Data Console (pilot)</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+<!-- Self-hosted sql.js — no external requests (GDPR + offline classrooms). MIT, see vendor/sqljs/LICENSE. -->
+<script src="vendor/sqljs/sql-wasm.js"></script>
+<style>
+:root{
+  --itu-accent:#4a2fe0;      /* keep in sync with the app's --itu-accent */
+  --itu-ink:#141414; --bg:#f2efe6; --card:#ffffff; --muted:#6b6459;
+  --border:var(--itu-ink); --accent:var(--itu-accent); --ok:#1f8a70; --field:#faf8f2; --danger:#b5333a;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--itu-ink); font-family:'Inter',system-ui,sans-serif; margin:0; padding:28px 18px 60px;}
+.wrap{max-width:1040px; margin:0 auto;}
+h1{font-family:'VT323',monospace; font-size:3rem; text-transform:uppercase; color:var(--accent); margin:0 0 2px; letter-spacing:.5px;}
+.pill{font-family:'VT323',monospace; font-size:1rem; background:var(--accent); color:#fff; padding:2px 12px; vertical-align:middle; margin-left:6px;}
+.sub{font-family:'VT323',monospace; font-size:1.1rem; color:var(--muted); margin:0 0 20px; line-height:1.4;}
+.sub a{color:var(--accent);}
+.card{background:var(--card); border:5px solid var(--border); box-shadow:8px 8px 0 rgba(0,0,0,.14); padding:22px 24px; margin-bottom:20px;}
+.card h2{font-family:'VT323',monospace; font-size:1.6rem; text-transform:uppercase; margin:0 0 14px;}
+.kick{font-family:'VT323',monospace; font-size:1.05rem; color:var(--accent); text-transform:lowercase;}
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+button{font-family:'VT323',monospace; font-size:1.25rem; text-transform:uppercase; cursor:pointer; padding:8px 18px;
+  border:4px solid var(--border); background:var(--accent); color:#fff; box-shadow:5px 5px 0 var(--border); transition:.08s;}
+button:active{box-shadow:0 0 0 var(--border); transform:translate(5px,5px);}
+button.ghost{background:var(--card); color:var(--itu-ink);}
+select, textarea{font-family:'Inter',monospace; font-size:.95rem; border:3px solid var(--border); background:var(--field); color:var(--itu-ink); padding:9px 11px;}
+select:focus, textarea:focus{outline:none; border-color:var(--accent);}
+textarea{width:100%; min-height:88px; resize:vertical; margin-top:10px; font-family:ui-monospace,monospace; font-size:.85rem;}
+.stats{font-family:'VT323',monospace; font-size:1.15rem; color:var(--muted); margin-top:12px; line-height:1.7;}
+.stats b{color:var(--accent);}
+table{border-collapse:collapse; width:100%; font-size:.82rem; margin-top:14px; font-family:'Inter',sans-serif;}
+th{font-family:'VT323',monospace; font-size:1rem; text-transform:uppercase; text-align:left; color:var(--muted); border-bottom:3px solid var(--border); padding:7px 10px;}
+td{padding:7px 10px; border-bottom:1px solid #eee; vertical-align:top; max-width:360px; overflow-wrap:break-word;}
+tr:hover td{background:var(--field);}
+.tablebox{overflow-x:auto;}
+.note{font-family:'Inter',sans-serif; font-size:.78rem; color:var(--muted); line-height:1.6; margin-top:12px;}
+.err{color:var(--danger); font-family:ui-monospace,monospace; font-size:.85rem; margin-top:10px; white-space:pre-wrap;}
+input[type=file]{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Data Console <span class="pill">PILOT</span></h1>
+  <p class="sub">In-browser SQLite (WebAssembly, in-memory) — zero backend. For pilots and testing only:<br>
+    data lives on each device until exported. Production uses PostgreSQL (see <a href="server/schema.sql">server/schema.sql</a>).</p>
+
+  <div class="card">
+    <h2>1 · Load data</h2>
+    <div class="row">
+      <button onclick="loadLocal()">Load this browser's data</button>
+      <button class="ghost" onclick="document.getElementById('file-in').click()">Import JSON file(s)…</button>
+      <input type="file" id="file-in" accept=".json" multiple onchange="importFiles(this.files)">
+      <button class="ghost" onclick="resetDb()">Reset console</button>
+    </div>
+    <div class="stats" id="stats">No data loaded yet. Finish a contract in <a href="index.html">index.html</a> on this device
+      (its events are buffered locally), or import the JSON files exported with “Download research data” on the app's end screen.</div>
+  </div>
+
+  <div class="card">
+    <h2>2 · Analyze</h2>
+    <div class="row">
+      <select id="preset" style="flex:1; min-width:280px">
+        <option value="sessions">Sessions overview</option>
+        <option value="values">Values chosen across cohort (RQ4)</option>
+        <option value="commitment">Commitment spread per group (RQ3)</option>
+        <option value="sections">Time &amp; words per section</option>
+        <option value="funnel">Funnel: started → completed</option>
+        <option value="consent">Consent log (per session)</option>
+        <option value="freetext">Contract free-text corpus (qualitative)</option>
+        <option value="anon">Anonymised event stream (free text stripped)</option>
+      </select>
+      <button onclick="runPreset()">Run</button>
+    </div>
+    <textarea id="sql" placeholder="…or write your own SQL (tables: events, players — payload is JSON: json_extract(payload,'$.field'))"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" onclick="runCustom()">Run custom SQL</button>
+      <button class="ghost" onclick="exportCsv()">Result → CSV</button>
+      <button class="ghost" onclick="exportSqlite()">DB → .sqlite</button>
+      <button class="ghost" onclick="exportJson()">Raw events → JSON</button>
+    </div>
+    <div class="err" id="err"></div>
+    <div class="tablebox" id="out"></div>
+    <p class="note">The .sqlite export opens directly in pandas / DB Browser. In this app, member names never enter the
+      telemetry (only pseudonyms), so the <code>players</code> table stays empty by design — analysis is pseudonymous
+      from the start. Free-text answers live under <code>payload.$.text</code>; the “anonymised” preset strips them.</p>
+  </div>
+</div>
+
+<script>
+let db=null, lastResult=null;
+const QKEY='cc_events';   // the app's local event log (bare array)
+
+const SCHEMA=`
+CREATE TABLE IF NOT EXISTS players(
+  player_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, name TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS events(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL, seq INTEGER NOT NULL,
+  event TEXT NOT NULL, ts TEXT NOT NULL,
+  group_name TEXT, cohort TEXT, course TEXT, player_id TEXT,
+  payload TEXT NOT NULL,
+  UNIQUE(session_id,seq));`;
+
+const PRESETS={
+ sessions:`SELECT session_id,
+  MAX(group_name) AS group_name, MAX(cohort) AS cohort, MAX(course) AS course,
+  MIN(CASE WHEN event='session_start'    THEN ts END) AS started,
+  MAX(CASE WHEN event='contract_complete' THEN ts END) AS completed,
+  SUM(event='section_saved')      AS sections_saved,
+  SUM(event='consent_ack')        AS consents
+FROM events GROUP BY session_id ORDER BY started`,
+
+ values:`SELECT je.value AS value, COUNT(*) AS groups
+FROM events e, json_each(e.payload,'$.values') je
+WHERE e.event='contract_complete'
+GROUP BY 1 ORDER BY 2 DESC`,
+
+ commitment:`SELECT session_id, MAX(group_name) AS group_name,
+  MIN(je.value) AS min_commit, MAX(je.value) AS max_commit,
+  ROUND(AVG(je.value),2) AS avg_commit,
+  MAX(je.value) - MIN(je.value) AS spread
+FROM events e, json_each(e.payload,'$.commitment') je
+WHERE e.event='contract_complete'
+GROUP BY session_id ORDER BY spread DESC`,
+
+ sections:`SELECT json_extract(payload,'$.section') AS section,
+  COUNT(*) AS n,
+  ROUND(AVG(json_extract(payload,'$.dwellMs'))/1000.0,1) AS avg_seconds,
+  ROUND(AVG(json_extract(payload,'$.wordCount')),1) AS avg_words
+FROM events WHERE event='section_saved'
+GROUP BY 1 ORDER BY 1`,
+
+ funnel:`SELECT status, COUNT(*) AS sessions FROM (
+  SELECT session_id,
+    CASE WHEN MAX(event='contract_complete') THEN 'completed' ELSE 'in_progress' END AS status
+  FROM events GROUP BY session_id)
+GROUP BY status`,
+
+ consent:`SELECT session_id, MAX(group_name) AS group_name,
+  COUNT(*) AS consents,
+  MAX(json_extract(payload,'$.consentVersion')) AS consent_version
+FROM events WHERE event='consent_ack'
+GROUP BY session_id`,
+
+ freetext:`SELECT session_id, MAX(group_name) AS group_name,
+  json_extract(payload,'$.text') AS answers_text
+FROM events WHERE event='contract_complete'
+GROUP BY session_id`,
+
+ anon:`SELECT session_id, seq, event, ts, group_name, cohort, course,
+  json_remove(payload,'$.text') AS payload
+FROM events ORDER BY session_id, seq`
+};
+
+async function ensureDb(){
+  if(db) return db;
+  const SQL=await initSqlJs({locateFile:f=>'vendor/sqljs/'+f});
+  db=new SQL.Database(); db.run(SCHEMA); return db;
+}
+
+// Same contract as the server ingest: split any member names to `players`,
+// dedupe on (session_id, seq). In this app names never appear in events, so
+// the split is a safety net; the players table normally stays empty.
+function ingest(batch){
+  let stored=0;
+  for(const ev0 of batch){
+    if(!ev0||!ev0.event||!ev0.sessionId||ev0.seq==null||!ev0.ts) continue;
+    const ev={...ev0}; delete ev.token;
+    if(ev.event==='session_start' && Array.isArray(ev.players)){
+      for(const p of ev.players){
+        if(p&&p.playerId&&p.name)
+          db.run('INSERT OR IGNORE INTO players(player_id,session_id,name) VALUES(?,?,?)',[p.playerId,ev.sessionId,p.name]);
+      }
+      ev.players=ev.players.map(p=>({playerId:p&&p.playerId}));
+    }
+    db.run(`INSERT OR IGNORE INTO events(session_id,seq,event,ts,group_name,cohort,course,player_id,payload)
+            VALUES(?,?,?,?,?,?,?,?,?)`,
+      [ev.sessionId,ev.seq,ev.event,ev.ts,ev.groupName||null,ev.cohort||null,ev.course||null,
+       ev.player_id||null,JSON.stringify(ev)]);
+    stored+=db.getRowsModified();
+  }
+  return stored;
+}
+
+// The app buffers a bare array under cc_events; its "Download research data"
+// export wraps it as {sessionId, events:[...]}. Accept both shapes.
+function asBatch(parsed){
+  if(Array.isArray(parsed)) return parsed;
+  if(parsed && Array.isArray(parsed.events)) return parsed.events;
+  return [];
+}
+
+function q1(sql){ try{const r=db.exec(sql); return r.length?r[0].values[0][0]:0;}catch(e){return 0;} }
+function refreshStats(msg){
+  const g=q1('SELECT COUNT(*) FROM events'), s=q1('SELECT COUNT(DISTINCT session_id) FROM events'),
+        gr=q1("SELECT COUNT(DISTINCT group_name) FROM events WHERE group_name IS NOT NULL"),
+        p=q1('SELECT COUNT(*) FROM players');
+  document.getElementById('stats').innerHTML =
+    (msg?msg+'<br>':'')+`In memory: <b>${g}</b> events · <b>${s}</b> sessions · <b>${gr}</b> groups · <b>${p}</b> named players (0 expected — names never enter telemetry).`;
+}
+
+async function loadLocal(){
+  await ensureDb();
+  let queue=[]; try{queue=JSON.parse(localStorage.getItem(QKEY))||[];}catch(e){}
+  const n=ingest(queue);
+  refreshStats(`Loaded local buffer: ${queue.length} events found, <b>${n}</b> new stored (duplicates skipped).`);
+}
+async function importFiles(files){
+  await ensureDb();
+  let total=0, stored=0;
+  for(const f of files){
+    try{ const batch=asBatch(JSON.parse(await f.text())); total+=batch.length; stored+=ingest(batch); }catch(e){}
+  }
+  document.getElementById('file-in').value='';
+  refreshStats(`Imported ${files.length} file(s): ${total} events read, <b>${stored}</b> new stored.`);
+}
+function resetDb(){ if(db){db.close();db=null;} lastResult=null;
+  document.getElementById('out').innerHTML=''; document.getElementById('err').textContent='';
+  document.getElementById('stats').textContent='Console reset. Load data to start again.'; }
+
+function runSql(sql){
+  document.getElementById('err').textContent='';
+  if(!db){ document.getElementById('err').textContent='Load data first.'; return; }
+  try{ const res=db.exec(sql); lastResult=res.length?res[0]:{columns:[],values:[]}; render(lastResult); }
+  catch(e){ document.getElementById('err').textContent=String(e); }
+}
+function runPreset(){ const k=document.getElementById('preset').value; document.getElementById('sql').value=PRESETS[k]; runSql(PRESETS[k]); }
+function runCustom(){ runSql(document.getElementById('sql').value); }
+
+function render(r){
+  if(!r.columns.length){ document.getElementById('out').innerHTML='<p class="note">Query OK — no rows.</p>'; return; }
+  let h='<table><tr>'+r.columns.map(c=>'<th>'+esc(c)+'</th>').join('')+'</tr>';
+  for(const row of r.values) h+='<tr>'+row.map(v=>'<td>'+esc(v==null?'—':String(v))+'</td>').join('')+'</tr>';
+  document.getElementById('out').innerHTML=h+'</table>';
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function download(name,blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click(); }
+function exportCsv(){
+  if(!lastResult||!lastResult.columns.length){ document.getElementById('err').textContent='Run a query first.'; return; }
+  const csv=[lastResult.columns.join(',')]
+    .concat(lastResult.values.map(r=>r.map(v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(',')))
+    .join('\n');
+  download('contract-result.csv',new Blob([csv],{type:'text/csv'}));
+}
+function exportSqlite(){ if(!db)return; download('collaboration-contract-pilot.sqlite',new Blob([db.export()],{type:'application/octet-stream'})); }
+function exportJson(){
+  if(!db)return;
+  const res=db.exec('SELECT payload FROM events ORDER BY session_id,seq');
+  const rows=res.length?res[0].values.map(v=>JSON.parse(v[0])):[];
+  download('contract-events.json',new Blob([JSON.stringify(rows,null,1)],{type:'application/json'}));
+}
+</script>
+</body>
+</html>

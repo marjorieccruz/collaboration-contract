@@ -1,0 +1,5 @@
+# Block direct access to the config and helper files
+<FilesMatch "^(config\.php|lib\.php)$">
+  Require all denied
+</FilesMatch>
+Options -Indexes

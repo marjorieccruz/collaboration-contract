@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Coaching Dashboard · IT:U</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{color-scheme:light;--accent:#4a2fe0;--accent-2:#1a6f5a;--ink:#141414;--bg:#f2efe6;--card:#ffffff;
+  --muted:#5d574d;--danger:#a32a31;--field:#faf8f2;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,sans-serif;padding:16px}
+.wrap{max-width:1150px;margin:0 auto}
+h1{font-family:VT323,monospace;font-size:2.6rem;margin:.2em 0}
+h2{font-family:VT323,monospace;font-size:1.8rem;margin:.2em 0}
+.kick{font-family:VT323,monospace;color:var(--accent);font-size:1.2rem;margin:0}
+.card{background:var(--card);border:2px solid var(--ink);padding:16px;margin:12px 0;box-shadow:4px 4px 0 var(--ink)}
+input,select,textarea{font:inherit;padding:8px;border:2px solid var(--ink);background:var(--field);color:var(--ink);max-width:100%}
+textarea{width:100%;min-height:120px;resize:vertical}
+button{font:600 .9rem Inter,sans-serif;padding:8px 14px;border:2px solid var(--ink);background:var(--accent);color:#fff;cursor:pointer;margin:4px 4px 4px 0}
+button.ghost{background:transparent;color:var(--ink)}
+button.danger{background:var(--danger)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--muted);vertical-align:top}
+code{font-size:1rem;font-weight:700;color:var(--accent)}
+.hidden{display:none}
+.muted{color:var(--muted)}
+.pill{display:inline-block;padding:1px 8px;border:1px solid;font-size:.8rem;font-weight:700}
+.ok{color:var(--accent-2)} .no{color:var(--muted)}
+pre{white-space:pre-wrap;font:inherit;margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.grid>div{border:1px solid var(--muted);padding:10px}
+.grid h4{margin:0 0 4px;color:var(--accent)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.tabs button{margin:0;background:transparent;color:var(--ink);border-bottom-width:2px}
+.tabs button.on{background:var(--accent);color:#fff}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+.kpi{border:2px solid var(--ink);padding:10px}.kpi b{display:block;font:2.2rem/1 VT323,monospace;color:var(--accent)}
+.bars{display:grid;grid-template-columns:150px 1fr 40px;gap:4px 10px;align-items:center;font-size:.85rem}
+.bar{height:14px;background:var(--accent);min-width:2px}
+.feed{max-height:260px;overflow:auto;font-size:.85rem;border-top:1px solid var(--muted);margin-top:8px}
+.feed div{padding:4px 0;border-bottom:1px dotted var(--muted)}
+.live{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--accent-2);margin-right:6px;animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.gcard{border:2px solid var(--ink);padding:12px;background:var(--card)}
+.gcard h4{margin:0 0 2px;font-size:1rem}
+.two{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px}
+@media(max-width:820px){.two{grid-template-columns:1fr}}
+.note{border:1px solid var(--muted);padding:10px;margin-bottom:10px}
+.note h4{margin:0 0 2px;font-size:.95rem}
+label.f{display:block;font-weight:600;font-size:.85rem;margin:10px 0 2px}
+@media print{button,.noprint,.tabs{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kick">:coaching dashboard</p>
+  <h1>iPBL Coaching</h1>
+
+  <div id="login" class="card hidden">
+    <p>Sign in with your coach, researcher or owner account.</p>
+    <input id="em" type="email" placeholder="e-mail"> <input id="pw" type="password" placeholder="password" onkeydown="if(event.key==='Enter')signIn()">
+    <button onclick="signIn()">Sign in</button>
+    <p id="lmsg"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <p class="muted">Signed in as <b id="me"></b> <span class="pill" id="roleTag"></span> ·
+      <a href="#" onclick="api('logout').then(()=>location.reload());return false">sign out</a></p>
+
+    <div class="toolbar noprint">
+      <b>Filter:</b>
+      <select id="fCourse" onchange="refreshAll()"><option value="">All courses</option></select>
+      <select id="fCohort" onchange="refreshAll()"><option value="">All cohorts</option></select>
+      <button class="ghost" onclick="load()">↻ Refresh</button>
+      <span class="muted" id="updated"></span>
+    </div>
+
+    <div class="tabs" id="tabs"></div>
+
+    <!-- ============ OVERVIEW ============ -->
+    <section id="tab-overview" class="tabpane">
+      <div class="card">
+        <div class="kpis" id="kpis"></div>
+        <div class="cards" id="gcards"></div>
+      </div>
+    </section>
+
+    <!-- ============ COLLABORATION CONTRACT ============ -->
+    <section id="tab-contract" class="tabpane hidden">
+      <div class="card noprint">
+        <b>Create groups</b>
+        <p class="muted" style="margin:4px 0 10px">Creates N groups with a join code each. Hand the codes out in class or on Canvas.</p>
+        <input id="gCourse" placeholder="Course, e.g. PBL101" size="14">
+        <input id="gCohort" placeholder="Cohort, e.g. WS2026" size="14">
+        <input id="gN" type="number" min="1" max="40" value="12" style="width:80px">
+        <button onclick="createGroups()">Create</button>
+        <span id="cmsg"></span>
+      </div>
+
+      <div class="card noprint">
+        <b>Student forgot the password?</b>
+        <p class="muted" style="margin:4px 0 10px">Creates a new temporary password. Give it to the student; they can sign in with it.</p>
+        <input id="rEmail" type="email" placeholder="student e-mail" size="28">
+        <button class="ghost" onclick="resetPw()">Reset password</button>
+        <span id="rmsg" style="font-weight:700"></span>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <b><span class="live" id="liveDot"></span>Live overview</b>
+          <label class="muted noprint"><input type="checkbox" id="auto" checked onchange="schedule()"> auto-refresh every 10 s</label>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-top:10px">
+          <div><b style="font-size:.9rem">Where are the groups now?</b><div class="bars" id="bars" style="margin-top:8px"></div></div>
+          <div><b style="font-size:.9rem">Latest activity</b><div class="feed" id="feed"></div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="noprint" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <b>Groups</b>
+          <button class="ghost" onclick="exportCodes()">↓ Codes (CSV)</button>
+          <button class="ghost" onclick="exportAll()">↓ Contracts (JSON)</button>
+          <button class="ghost" onclick="exportEvents()">↓ Research events (JSON)</button>
+          <button class="ghost" onclick="exportHistory()">↓ Contract history (JSON)</button>
+        </div>
+        <table><thead><tr><th>Group</th><th>Code</th><th>Members</th><th>Progress</th><th>Last activity</th><th>Purpose</th><th></th></tr></thead>
+          <tbody id="rows"></tbody></table>
+      </div>
+      <div id="detail" class="card hidden"></div>
+    </section>
+
+    <!-- ============ REFLECTION TOOL ============ -->
+    <section id="tab-reflection" class="tabpane hidden">
+      <div class="card">
+        <h2>Weekly Reflection Questionnaire</h2>
+        <p>Teams answer this questionnaire during the semester to reflect on how the collaboration is going.</p>
+        <p><a href="https://ipbl-reflection-tool-7eb785.gitlab.io/?survey=fbb38208-f76c-4622-b01f-22f465ade2ac" target="_blank" rel="noopener">
+          Open the weekly questionnaire ↗</a></p>
+        <div style="border:1px solid var(--muted);padding:10px;margin-top:12px">
+          <b>Why there is no data here.</b>
+          <p class="muted" style="margin:4px 0 0">The reflection tool runs entirely in the browser and keeps the answers anonymous, with no
+          link to a student or a group. Results can be exported from the tool itself as CSV. Bringing those results into this dashboard,
+          even as group averages, is possible later and would need a decision on how the CSV is collected.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DISC ============ -->
+    <section id="tab-disc" class="tabpane hidden">
+      <div class="card">
+        <h2>DISC Reflection</h2>
+        <p>A self-reflection on working style, used at the start of the project to open the conversation about roles and differences.</p>
+        <p><a href="https://ipbl-reflection-tool-7eb785.gitlab.io/?survey=7dbe5f1b-af17-4fe4-99dc-5bd0acf96f78" target="_blank" rel="noopener">
+          Open the DISC reflection ↗</a></p>
+        <div style="border:1px solid var(--muted);padding:10px;margin-top:12px">
+          <b>Why there is no data here.</b>
+          <p class="muted" style="margin:4px 0 0">Answers stay in the student's own browser and are anonymous. Profiles of this kind are
+          sensitive, so results belong to the students themselves. If this tab ever shows data, it should be at group or cohort level,
+          and never a named profile.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SESSION NOTES ============ -->
+    <section id="tab-notes" class="tabpane hidden">
+      <div class="two">
+        <div class="card">
+          <b id="noteFormTitle">New session note</b>
+          <p class="muted" style="margin:4px 0 0">Only you can see your notes. They stay out of every research export.</p>
+          <input type="hidden" id="nId">
+          <label class="f">Date</label><input id="nDate" type="date">
+          <label class="f">Group</label>
+          <select id="nGroup"><option value="">Whole cohort / no specific group</option></select>
+          <label class="f">Title</label><input id="nTitle" placeholder="e.g. Kick-off coaching session" style="width:100%">
+          <label class="f">Present</label><input id="nAtt" placeholder="names or number of participants" style="width:100%">
+          <label class="f">Notes</label><textarea id="nBody" placeholder="What came up, what the team is working on, how they are collaborating…"></textarea>
+          <label class="f">Next steps</label><textarea id="nFu" style="min-height:70px" placeholder="One per line: what, who, by when"></textarea>
+          <div style="margin-top:10px">
+            <button onclick="saveNote()">Save note</button>
+            <button class="ghost" onclick="clearNote()">Clear</button>
+            <button class="ghost danger hidden" id="nDel" onclick="deleteNote()">Delete</button>
+            <span id="nmsg" style="font-weight:700"></span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="toolbar" style="margin-top:0">
+            <b>My notes</b>
+            <select id="nFilterGroup" onchange="renderNotes()"><option value="">All groups</option></select>
+          </div>
+          <div id="noteList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PEOPLE ============ -->
+    <section id="tab-people" class="tabpane hidden">
+      <div class="card">
+        <b>Add a coach or researcher</b>
+        <p class="muted" style="margin:4px 0 10px">Creates the account and shows a temporary password once. Pass it on, and ask the person
+          to change it later. Coaches see groups, contracts and their own session notes. Researchers see groups, contracts and the exports,
+          never the notes.</p>
+        <input id="uEmail" type="email" placeholder="e-mail" size="26">
+        <input id="uName" placeholder="name (optional)" size="18">
+        <select id="uRole"><option value="coach">coach</option><option value="researcher">researcher</option></select>
+        <button onclick="createUser()">Create account</button>
+        <div id="umsg" style="font-weight:700;margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <b>Accounts</b>
+        <table><thead><tr><th>Name</th><th>E-mail</th><th>Role</th><th>Since</th></tr></thead><tbody id="uRows"></tbody></table>
+        <p class="muted" id="uStudents"></p>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+const STEPS = ["Who are we","What can we do","How far","Our purpose","Good group","Good group work"];
+const TABS = [['overview','Overview'],['contract','Collaboration Contract'],['reflection','Reflection Tool'],
+              ['disc','DISC Reflection'],['notes','Session Notes'],['people','People']];
+let G=[], ME=null, NOTES=[], tab='overview';
+const $=id=>document.getElementById(id);
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(a, body){
+  try{
+    const r = await fetch('api/?a='+a, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{}) });
+    let d={}; try{ d=await r.json(); }catch(e){}
+    return r.ok ? d : { error:d.error||('HTTP '+r.status), status:r.status };
+  }catch(e){ return { error:'offline' }; }
+}
+async function signIn(){
+  const r = await api('login', { email:$('em').value.trim(), password:$('pw').value });
+  if(r.error) $('lmsg').textContent=r.error; else init();
+}
+async function init(){
+  if(!location.protocol.startsWith('http') || location.hostname.endsWith('github.io')){
+    $('login').classList.remove('hidden');
+    $('login').innerHTML='<p><b>The coaching dashboard needs the server.</b> It works only where the app is installed with its <code>api/</code> folder. See DEPLOY.md.</p>';
+    return;
+  }
+  const r = await api('me');
+  if(r.status===503){ $('login').classList.remove('hidden'); $('login').innerHTML='<p><b>Not installed yet.</b> Open <a href="install.php">install.php</a> first.</p>'; return; }
+  if(!r.user){ $('login').classList.remove('hidden'); return; }
+  if(!['owner','coach','researcher'].includes(r.user.role)){
+    $('login').classList.remove('hidden'); $('lmsg').textContent='This account has no coaching access.'; return;
+  }
+  ME = r.user;
+  $('me').textContent=ME.email; $('roleTag').textContent=ME.role;
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  renderTabs(); load(); schedule();
+}
+function canCoach(){ return ME && (ME.role==='owner' || ME.role==='coach'); }
+function renderTabs(){
+  $('tabs').innerHTML = TABS.filter(t=>{
+    if(t[0]==='people') return ME.role==='owner';
+    if(t[0]==='notes') return canCoach();
+    return true;
+  }).map(t=>`<button class="${t[0]===tab?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+  const pane=$('tab-'+tab); if(pane) pane.classList.remove('hidden');
+}
+function go(t){ tab=t; renderTabs(); if(t==='people') loadUsers(); if(t==='notes') loadNotes(); }
+
+/* ---------- data ---------- */
+async function load(){
+  const r = await api('t_overview'); G = r.groups||[];
+  fillFilter('fCourse','course'); fillFilter('fCohort','cohort');
+  fillGroupSelects();
+  render(); live();
+  $('updated').textContent='updated '+new Date().toLocaleTimeString();
+}
+function fillFilter(id, key){
+  const vals=[...new Set(G.map(x=>x[key]).filter(Boolean))], sel=$(id), cur=sel.value;
+  sel.innerHTML=`<option value="">All ${key==='course'?'courses':'cohorts'}</option>`+vals.map(v=>`<option ${v===cur?'selected':''}>${esc(v)}</option>`).join('');
+}
+function fillGroupSelects(){
+  const opts = G.map(g=>`<option value="${g.id}">${esc(g.name)} (${esc(g.code)})</option>`).join('');
+  const a=$('nGroup'), b=$('nFilterGroup'), ca=a.value, cb=b.value;
+  a.innerHTML='<option value="">Whole cohort / no specific group</option>'+opts; a.value=ca;
+  b.innerHTML='<option value="">All groups</option>'+opts; b.value=cb;
+}
+function view(){ const c=$('fCourse').value, h=$('fCohort').value;
+  return G.filter(g=>(!c||g.course===c)&&(!h||g.cohort===h)); }
+function refreshAll(){ render(); live(); renderNotes(); }
+function ago(ts){
+  if(!ts) return '<span class="muted">—</span>';
+  const s=Math.max(0,(Date.now()-new Date(ts.replace(' ','T')+'Z'))/1000);
+  const t = s<60?'just now': s<3600?Math.floor(s/60)+' min ago': s<86400?Math.floor(s/3600)+' h ago': Math.floor(s/86400)+' d ago';
+  return s<120?`<b style="color:var(--accent-2)">${t}</b>`:t;
+}
+function progress(st){
+  if(!st||!st.started) return '<span class="pill no">not started</span>';
+  if(st.done) return '<span class="pill ok">✓ complete</span>';
+  return `<span class="pill">${(st.step||0)+1}/6 · ${esc(STEPS[st.step||0])}</span>`;
+}
+
+/* ---------- overview ---------- */
+function lastNoteFor(gid){
+  const n = NOTES.filter(x=>String(x.group_id)===String(gid)).sort((a,b)=>b.note_date<a.note_date?-1:1).pop();
+  return n ? n.note_date : null;
+}
+function render(){
+  const gs=view();
+  $('gcards').innerHTML = gs.map(g=>{
+    const st=(g.contract||{}).state||{};
+    const ln=lastNoteFor(g.id);
+    return `<div class="gcard"><h4>${esc(st.groupName||g.name)}</h4>
+      <div class="muted" style="font-size:.85rem">${esc(g.course||'')} ${esc(g.cohort||'')} · <code>${esc(g.code)}</code></div>
+      <p style="margin:8px 0 2px;font-size:.9rem">${g.members.length} member${g.members.length===1?'':'s'}</p>
+      <div style="margin:4px 0">${progress(st)}</div>
+      <div class="muted" style="font-size:.85rem">Contract: ${ago((g.contract||{}).updated_at)}</div>
+      ${canCoach()?`<div class="muted" style="font-size:.85rem">Last session note: ${ln?esc(ln):'—'}</div>`:''}
+      <button class="ghost noprint" style="margin-top:8px" onclick="go('contract');show(${g.id})">Open contract</button></div>`;
+  }).join('') || '<p class="muted">No groups yet. Create them in the Collaboration Contract tab.</p>';
+
+  $('rows').innerHTML = gs.map(g=>{
+    const st=(g.contract||{}).state||{};
+    const names=g.members.map(m=>esc(m.name||m.email)).join(', ');
+    return `<tr><td><b>${esc(st.groupName||g.name)}</b><br><span class="muted">${esc(g.course||'')} ${esc(g.cohort||'')}</span></td>
+      <td><code>${esc(g.code)}</code></td>
+      <td>${g.members.length}<br><span class="muted">${names}</span></td>
+      <td>${progress(st)}</td>
+      <td>${ago((g.contract||{}).updated_at)}</td>
+      <td>${esc(((st.answers||{}).purpose||'').slice(0,120))}</td>
+      <td><button class="ghost" onclick="show(${g.id})">View</button></td></tr>`;
+  }).join('') || '<tr><td colspan="7" class="muted">No groups yet.</td></tr>';
+}
+const EVT={section_saved:'saved section',contract_complete:'completed the contract ✓',consent_ack:'joined the group',session_start:'started the contract',save_exit:'left the page'};
+async function live(){
+  const r = await api('t_activity'); if(r.error) return;
+  const gs=view();
+  const started=gs.filter(g=>((g.contract||{}).state||{}).started).length;
+  const done=gs.filter(g=>((g.contract||{}).state||{}).done).length;
+  $('kpis').innerHTML=[
+    ['Students registered', r.students],['Active now (10 min)', r.activeUsers10min],
+    ['Groups started', started+' / '+gs.length],['Contracts complete', done+' / '+gs.length]]
+    .map(k=>`<div class="kpi"><b>${k[1]}</b>${k[0]}</div>`).join('');
+  const counts=Array(8).fill(0);
+  gs.forEach(g=>{const st=(g.contract||{}).state||{}; counts[!st.started?0:st.done?7:(st.step||0)+1]++;});
+  const labels=['Not started',...STEPS.map((x,i)=>(i+1)+'. '+x),'Complete ✓'], max=Math.max(1,...counts);
+  $('bars').innerHTML=labels.map((l,i)=>`<span>${esc(l)}</span><div class="bar" style="width:${counts[i]/max*100}%;${i===7?'background:var(--accent-2)':''}"></div><span>${counts[i]}</span>`).join('');
+  $('feed').innerHTML=(r.feed||[]).map(e=>`<div><span class="muted">${ago(e.at)}</span> · <b>${esc(e.user||'?')}</b> (${esc(e.group)}) ${esc(EVT[e.event]||e.event)}${e.section?` <i>${esc(e.section)}</i>`:''}${e.words!=null?` · ${e.words} words`:''}</div>`).join('')||'<div class="muted">No activity yet.</div>';
+}
+let timer=null;
+function schedule(){ clearInterval(timer); const a=$('auto'); if(!a) return;
+  $('liveDot').style.visibility=a.checked?'visible':'hidden';
+  if(a.checked) timer=setInterval(()=>{ if(!document.hidden) load(); }, 10000); }
+
+function show(id){
+  const g=G.find(x=>x.id==id); if(!g) return;
+  const row=g.contract||{}, st=row.state||{}, a=st.answers||{}, mem=st.members||[];
+  const per=(q,f)=>mem.map(m=>{const v=((a[q]||{})[m.playerId]||{})[f]; return v?`• ${m.name}: ${v}`:'';}).filter(Boolean).join('\n');
+  const q4=a.q4||{}, q5=a.q5||{}, q3=a.q3||{};
+  const cells=[
+    ['People & Roles', per('q1','role')],
+    ['Purpose', a.purpose],
+    ['Common Goal', (q3.shared||'') + '\n\nCommitment:\n' + mem.map(m=>`• ${m.name}: ${((q3[m.playerId]||{}).commit)||'-'}/5`).join('\n')],
+    ['Personal Goals', per('q3','goal') + (per('q3','dev')?'\n\nDevelop:\n'+per('q3','dev'):'')],
+    ['Strengths', per('q2','str')], ['Weaknesses & Risks', per('q2','weak')],
+    ['Values', (q4.values||[]).join(', ') + (q4.examples?'\n\n'+q4.examples:'')],
+    ['Rules', [q5.comm&&'Communication: '+q5.comm, q5.dec&&'Decisions: '+q5.dec].filter(Boolean).join('\n\n')],
+    ['Needs & Conflict', [q5.needs&&'Needs: '+q5.needs, q5.conflict&&'Conflict: '+q5.conflict].filter(Boolean).join('\n\n')],
+  ];
+  $('detail').innerHTML = `<p class="kick">:${esc(g.code)}</p><h2 style="margin:0">${esc(st.groupName||g.name)}</h2>
+    <p class="muted">Version ${row.version||0} · last saved ${row.updated_at?esc(row.updated_at)+' UTC':'never'}</p>
+    <div class="grid">${cells.map(c=>`<div><h4>${c[0]}</h4><pre>${esc(c[1]||'—')}</pre></div>`).join('')}</div>
+    <p class="noprint">${canCoach()?`<button class="ghost" onclick="noteForGroup(${g.id})">+ Session note for this group</button>`:''}
+    <button class="ghost" onclick="window.print()">Print</button>
+    <button class="ghost" onclick="$('detail').classList.add('hidden')">Close</button></p>`;
+  $('detail').classList.remove('hidden'); $('detail').scrollIntoView({behavior:'smooth'});
+}
+
+/* ---------- groups / passwords / exports ---------- */
+async function createGroups(){
+  const course=$('gCourse').value.trim(), cohort=$('gCohort').value.trim(), n=+$('gN').value;
+  if(!course||!n) return $('cmsg').textContent='Course and number are required.';
+  const r = await api('t_create_groups', { course, cohort, n });
+  $('cmsg').textContent = r.error?r.error:`✓ ${r.created.length} groups created`;
+  load();
+}
+async function resetPw(){
+  const r = await api('t_reset_password', { email:$('rEmail').value.trim() });
+  $('rmsg').textContent = r.error ? r.error : 'New password: '+r.password;
+}
+function dl(name, text, type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click(); }
+function exportCodes(){
+  dl('group-codes.csv', 'group,code,course,cohort\n'+view().map(g=>[g.name,g.code,g.course,g.cohort].map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n'), 'text/csv');
+}
+function exportAll(){ dl('contracts.json', JSON.stringify(view(), null, 2), 'application/json'); }
+async function exportEvents(){ const r=await api('t_export',{what:'events'}); dl('research-events.json', JSON.stringify(r.rows||[], null, 2), 'application/json'); }
+async function exportHistory(){ const r=await api('t_export',{what:'history'}); dl('contract-history.json', JSON.stringify(r.rows||[], null, 2), 'application/json'); }
+
+/* ---------- session notes ---------- */
+async function loadNotes(){
+  if(!canCoach()) return;
+  const r = await api('n_list'); NOTES = r.notes||[];
+  if(!$('nDate').value) $('nDate').value = new Date().toISOString().slice(0,10);
+  renderNotes(); render();
+}
+function renderNotes(){
+  const f=$('nFilterGroup').value;
+  const list = NOTES.filter(n=>!f||String(n.group_id)===f);
+  $('noteList').innerHTML = list.map(n=>`<div class="note">
+      <h4>${esc(n.title||'(untitled)')} <span class="muted" style="font-weight:400">· ${esc(n.note_date)}</span></h4>
+      <div class="muted" style="font-size:.85rem">${n.group_id?esc(n.group_name||'')+' ('+esc(n.group_code||'')+')':'whole cohort'}${n.attendees?' · '+esc(n.attendees):''}</div>
+      <pre style="margin-top:6px">${esc((n.body||'').slice(0,400))}${(n.body||'').length>400?'…':''}</pre>
+      ${n.followups?`<div style="margin-top:6px"><b style="font-size:.85rem">Next steps</b><pre>${esc(n.followups)}</pre></div>`:''}
+      <button class="ghost noprint" style="margin-top:6px" onclick="editNote(${n.id})">Edit</button>
+    </div>`).join('') || '<p class="muted">No notes yet.</p>';
+}
+function clearNote(){
+  ['nId','nTitle','nAtt','nBody','nFu'].forEach(i=>$(i).value='');
+  $('nGroup').value=''; $('nDate').value=new Date().toISOString().slice(0,10);
+  $('noteFormTitle').textContent='New session note'; $('nDel').classList.add('hidden'); $('nmsg').textContent='';
+}
+function editNote(id){
+  const n=NOTES.find(x=>x.id==id); if(!n) return;
+  $('nId').value=n.id; $('nDate').value=n.note_date; $('nGroup').value=n.group_id||'';
+  $('nTitle').value=n.title||''; $('nAtt').value=n.attendees||''; $('nBody').value=n.body||''; $('nFu').value=n.followups||'';
+  $('noteFormTitle').textContent='Edit session note'; $('nDel').classList.remove('hidden');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function noteForGroup(gid){ go('notes'); clearNote(); $('nGroup').value=String(gid); }
+async function saveNote(){
+  const gid=$('nGroup').value, g=G.find(x=>String(x.id)===gid);
+  const r = await api('n_save', { id:+$('nId').value||0, date:$('nDate').value, group:gid?+gid:0,
+    course:g?g.course:'', cohort:g?g.cohort:'', title:$('nTitle').value, attendees:$('nAtt').value,
+    body:$('nBody').value, followups:$('nFu').value });
+  if(r.error) return $('nmsg').textContent=r.error;
+  $('nmsg').textContent='✓ saved'; $('nId').value=r.id;
+  await loadNotes();
+}
+async function deleteNote(){
+  const id=+$('nId').value; if(!id) return;
+  const r = await api('n_delete', { id });
+  if(r.error) return $('nmsg').textContent=r.error;
+  clearNote(); await loadNotes();
+}
+
+/* ---------- people ---------- */
+async function loadUsers(){
+  const r = await api('u_list'); if(r.error) return;
+  $('uRows').innerHTML=(r.users||[]).map(u=>`<tr><td>${esc(u.name||'')}</td><td>${esc(u.email)}</td>
+     <td>${u.role==='owner'?'<b>owner</b>':`<select onchange="setRole(${u.id}, this.value)">
+       ${['coach','researcher','student'].map(x=>`<option ${x===u.role?'selected':''}>${x}</option>`).join('')}</select>`}</td>
+     <td class="muted">${esc((u.created_at||'').slice(0,10))}</td></tr>`).join('')
+     || '<tr><td colspan="4" class="muted">No coach or researcher accounts yet.</td></tr>';
+  $('uStudents').textContent=(r.studentCount||0)+' student accounts.';
+}
+async function createUser(){
+  const r = await api('u_create', { email:$('uEmail').value.trim(), name:$('uName').value.trim(), role:$('uRole').value });
+  if(r.error) return $('umsg').textContent=r.error;
+  $('umsg').innerHTML='✓ Account ready. Temporary password (shown once): <code>'+esc(r.password)+'</code>';
+  $('uEmail').value=''; $('uName').value=''; loadUsers();
+}
+async function setRole(id, role){ const r=await api('u_role',{ id, role }); if(r.error) alert(r.error); loadUsers(); }
+
+init();
+</script>
+</body>
+</html>

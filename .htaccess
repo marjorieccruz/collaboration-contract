@@ -1,0 +1,8 @@
+# Always use HTTPS
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+Options -Indexes
+<FilesMatch "\.(md|sql|py|yml)$">
+  Require all denied
+</FilesMatch>

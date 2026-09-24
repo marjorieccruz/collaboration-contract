@@ -1,0 +1,9 @@
+.DS_Store
+*.sqlite
+*.db
+.vscode/
+source/
+_to_delete/
+_old_git/
+deploy.zip
+api/config.php
