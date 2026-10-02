@@ -52,6 +52,14 @@ function cc_schema(PDO $db): array {
        group_id INT NULL, course VARCHAR(100) NULL, cohort VARCHAR(100) NULL,
        title VARCHAR(190) NULL, attendees VARCHAR(500) NULL, body $big NULL, followups $big NULL,
        created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL)$eng",
+    "CREATE TABLE IF NOT EXISTS cc_submissions (
+       id $ai, user_id INT NOT NULL, group_id INT NULL, instrument VARCHAR(40) NOT NULL,
+       state $big NOT NULL, version INT NOT NULL DEFAULT 1, done TINYINT NOT NULL DEFAULT 0,
+       created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
+       UNIQUE (user_id, instrument))$eng",
+    "CREATE TABLE IF NOT EXISTS cc_submission_history (
+       id $ai, submission_id INT NOT NULL, user_id INT NOT NULL, instrument VARCHAR(40) NOT NULL,
+       version INT NOT NULL, state $big NOT NULL, saved_at DATETIME NOT NULL)$eng",
     "CREATE TABLE IF NOT EXISTS cc_meta (
        k VARCHAR(50) PRIMARY KEY, v VARCHAR(190) NOT NULL)$eng",
     "CREATE TABLE IF NOT EXISTS cc_events (
@@ -71,16 +79,19 @@ function cc_ensure_schema(PDO $db): void {
     $st = $db->query("SELECT v FROM cc_meta WHERE k = 'schema_version'");
     $v = (int)($st->fetchColumn() ?: 0);
   } catch (Throwable $e) { $v = 0; }
-  if ($v >= 2) return;
+  if ($v >= 3) return;
   foreach (cc_schema($db) as $sql) { try { $db->exec($sql); } catch (Throwable $e) {} }
   // role column on users: owner | coach | researcher | student
   try { $db->exec("ALTER TABLE cc_users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'student'"); } catch (Throwable $e) {}
   try { $db->exec("UPDATE cc_users SET role = 'owner' WHERE is_teacher = 1 AND role <> 'owner'"); } catch (Throwable $e) {}
+  // rounds: a team contract can be revisited; every round keeps the previous one in the history
+  try { $db->exec("ALTER TABLE cc_contracts ADD COLUMN round INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+  try { $db->exec("ALTER TABLE cc_contract_history ADD COLUMN round INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
   try {
     $st = $db->prepare('INSERT INTO cc_meta (k, v) VALUES (?, ?)');
-    $st->execute(['schema_version', '2']);
+    $st->execute(['schema_version', '3']);
   } catch (Throwable $e) {
-    try { $db->prepare('UPDATE cc_meta SET v = ? WHERE k = ?')->execute(['2', 'schema_version']); } catch (Throwable $e2) {}
+    try { $db->prepare('UPDATE cc_meta SET v = ? WHERE k = ?')->execute(['3', 'schema_version']); } catch (Throwable $e2) {}
   }
 }
 

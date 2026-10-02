@@ -91,7 +91,7 @@ switch ($a) {
     $cur = $st->fetchColumn();
     if ($cur === false) {
       if ($exp !== 0) { $db->rollBack(); fail('conflict', 409); }
-      $db->prepare('INSERT INTO cc_contracts (group_id, state, version, updated_at, updated_by) VALUES (?,?,1,?,?)')->execute([$gid, $state, now(), $u['id']]);
+      $db->prepare('INSERT INTO cc_contracts (group_id, state, version, round, updated_at, updated_by) VALUES (?,?,1,1,?,?)')->execute([$gid, $state, now(), $u['id']]);
       $v = 1;
     } else {
       if ((int)$cur !== $exp) { $db->rollBack(); fail('conflict', 409); }
@@ -99,7 +99,8 @@ switch ($a) {
       $db->prepare('UPDATE cc_contracts SET state = ?, version = ?, updated_at = ?, updated_by = ? WHERE group_id = ? AND version = ?')
          ->execute([$state, $v, now(), $u['id'], $gid, $exp]);
     }
-    $db->prepare('INSERT INTO cc_contract_history (group_id, version, state, saved_at, saved_by) VALUES (?,?,?,?,?)')->execute([$gid, $v, $state, now(), $u['id']]);
+    $rst = $db->prepare('SELECT round FROM cc_contracts WHERE group_id = ?'); $rst->execute([$gid]); $round = (int)($rst->fetchColumn() ?: 1);
+    $db->prepare('INSERT INTO cc_contract_history (group_id, version, round, state, saved_at, saved_by) VALUES (?,?,?,?,?,?)')->execute([$gid, $v, $round, $state, now(), $u['id']]);
     $db->commit();
     out(['version' => $v]);
   }
@@ -264,6 +265,107 @@ switch ($a) {
     if (!in_array($role, ['coach', 'researcher', 'student'], true)) fail('Unknown role.');
     $db->prepare('UPDATE cc_users SET role = ?, is_teacher = 0 WHERE id = ?')->execute([$role, $uid]);
     out(['ok' => true]);
+  }
+
+  /* ---------------- CONTRACT ROUNDS ---------------- */
+  case 'contract_new_round': {
+    $u = need_user(); $gid = (int)($in['group'] ?? 0);
+    if (!is_member((int)$u['id'], $gid) && !in_array($u['role'], ['owner','coach'], true)) fail('not allowed', 403);
+    $st = $db->prepare('SELECT round FROM cc_contracts WHERE group_id = ?'); $st->execute([$gid]);
+    $cur = $st->fetchColumn();
+    if ($cur === false) fail('No contract yet.', 404);
+    $db->prepare('UPDATE cc_contracts SET round = round + 1 WHERE group_id = ?')->execute([$gid]);
+    out(['round' => (int)$cur + 1]);
+  }
+  case 'contract_rounds': {
+    $u = need_user(); $gid = (int)($in['group'] ?? 0);
+    if (!is_member((int)$u['id'], $gid) && !is_staff($u)) fail('not allowed', 403);
+    $st = $db->prepare('SELECT round, MIN(saved_at) AS first_saved, MAX(saved_at) AS last_saved, COUNT(*) AS saves,
+                        MAX(version) AS last_version FROM cc_contract_history WHERE group_id = ? GROUP BY round ORDER BY round');
+    $st->execute([$gid]);
+    $rounds = $st->fetchAll();
+    // the last state of each round, so the client can show what changed between rounds
+    $states = [];
+    foreach ($rounds as $r) {
+      $q = $db->prepare('SELECT state FROM cc_contract_history WHERE group_id = ? AND round = ? ORDER BY version DESC LIMIT 1');
+      $q->execute([$gid, $r['round']]);
+      $states[(int)$r['round']] = json_decode((string)$q->fetchColumn(), true);
+    }
+    out(['rounds' => $rounds, 'states' => $states]);
+  }
+
+  /* ---------------- INSTRUMENTS (individual submissions) ----------------
+     Visible to the person who wrote them, to coaches and to researchers.
+     Never to teammates. */
+  case 'sub_get': {
+    $u = need_user();
+    $inst = mb_substr((string)($in['instrument'] ?? ''), 0, 40);
+    $uid = (int)($in['user'] ?? 0) ?: (int)$u['id'];
+    if ($uid !== (int)$u['id'] && !is_staff($u)) fail('not allowed', 403);
+    $st = $db->prepare('SELECT state, version, done, updated_at FROM cc_submissions WHERE user_id = ? AND instrument = ?');
+    $st->execute([$uid, $inst]);
+    $r = $st->fetch();
+    out(['state' => $r ? json_decode($r['state'], true) : new stdClass(),
+         'version' => $r ? (int)$r['version'] : 0, 'done' => $r ? (bool)(int)$r['done'] : false,
+         'updated_at' => $r['updated_at'] ?? null]);
+  }
+  case 'sub_save': {
+    $u = need_user();
+    $inst = mb_substr((string)($in['instrument'] ?? ''), 0, 40);
+    if ($inst === '') fail('unknown instrument');
+    $state = json_encode($in['state'] ?? new stdClass(), JSON_UNESCAPED_UNICODE);
+    if (strlen($state) > 500_000) fail('submission too large');
+    $done = !empty($in['done']) ? 1 : 0;
+    $gid = (int)($in['group'] ?? 0) ?: null;
+    $st = $db->prepare('SELECT id, version FROM cc_submissions WHERE user_id = ? AND instrument = ?');
+    $st->execute([$u['id'], $inst]); $row = $st->fetch();
+    if ($row) {
+      $v = (int)$row['version'] + 1;
+      $db->prepare('UPDATE cc_submissions SET state = ?, version = ?, done = ?, group_id = ?, updated_at = ? WHERE id = ?')
+         ->execute([$state, $v, $done, $gid, now(), $row['id']]);
+      $sid = (int)$row['id'];
+    } else {
+      $db->prepare('INSERT INTO cc_submissions (user_id, group_id, instrument, state, version, done, created_at, updated_at) VALUES (?,?,?,?,1,?,?,?)')
+         ->execute([$u['id'], $gid, $inst, $state, $done, now(), now()]);
+      $sid = (int)$db->lastInsertId(); $v = 1;
+    }
+    $db->prepare('INSERT INTO cc_submission_history (submission_id, user_id, instrument, version, state, saved_at) VALUES (?,?,?,?,?,?)')
+       ->execute([$sid, $u['id'], $inst, $v, $state, now()]);
+    out(['version' => $v]);
+  }
+  case 't_submissions': {
+    need_staff();
+    $inst = mb_substr((string)($in['instrument'] ?? ''), 0, 40);
+    $sql = 'SELECT s.id, s.user_id, s.group_id, s.instrument, s.state, s.version, s.done, s.updated_at,
+                   u.name AS user_name, u.email AS user_email, g.name AS group_name, g.code AS group_code, g.course, g.cohort
+            FROM cc_submissions s JOIN cc_users u ON u.id = s.user_id
+            LEFT JOIN cc_groups g ON g.id = s.group_id';
+    $args = [];
+    if ($inst !== '') { $sql .= ' WHERE s.instrument = ?'; $args[] = $inst; }
+    $sql .= ' ORDER BY g.course, g.name, u.name';
+    $st = $db->prepare($sql); $st->execute($args);
+    $rows = array_map(function($r){ $r['state'] = json_decode($r['state'], true); return $r; }, $st->fetchAll());
+    out(['submissions' => $rows]);
+  }
+
+  /* ---------------- DANGER ZONE: clear a group's data (owner only) ---------------- */
+  case 't_reset_group': {
+    need_owner();
+    $gid = (int)($in['group'] ?? 0);
+    if (!$gid) fail('group required');
+    if ((string)($in['confirm'] ?? '') !== 'DELETE') fail('confirmation required');
+    $st = $db->prepare('SELECT code FROM cc_groups WHERE id = ?'); $st->execute([$gid]);
+    $code = $st->fetchColumn();
+    if (!$code) fail('group not found', 404);
+    $counts = [];
+    foreach ([['cc_contract_history','group_id'], ['cc_contracts','group_id'], ['cc_events','group_id'],
+              ['cc_submissions','group_id'], ['cc_memberships','group_id']] as [$t, $col]) {
+      $c = $db->prepare("SELECT COUNT(*) FROM $t WHERE $col = ?"); $c->execute([$gid]);
+      $counts[$t] = (int)$c->fetchColumn();
+      $db->prepare("DELETE FROM $t WHERE $col = ?")->execute([$gid]);
+    }
+    if (!empty($in['dropGroup'])) { $db->prepare('DELETE FROM cc_groups WHERE id = ?')->execute([$gid]); $counts['cc_groups'] = 1; }
+    out(['deleted' => $counts, 'code' => $code]);
   }
 
   default: fail('unknown action', 404);

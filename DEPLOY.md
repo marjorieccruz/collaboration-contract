@@ -1,6 +1,6 @@
 # Publicar em hospedagem compartilhada (PHP + MySQL)
 
-Versão 3.3.0. O app funciona em dois modos, escolhidos automaticamente:
+Versão 3.4.0. O app funciona em dois modos, escolhidos automaticamente:
 
 * **Online** (login, grupos, dados no seu servidor): quando roda na sua hospedagem com a pasta `api/`.
 * **Local/piloto** (sem login, dados só no navegador): no GitHub Pages ou abrindo o arquivo direto.
@@ -19,6 +19,12 @@ Os dados ficam no seu banco MySQL da o painel da sua hospedagem. Senhas são gua
 7. **Criar grupos**: abra `https://contract.example.org/teacher.html`, entre com a conta de docente, crie os grupos e baixe os códigos (CSV).
 8. **Alunos**: abrem `https://contract.example.org`, clicam em *Create account*, digitam o código do grupo e preenchem o contrato.
 
+## Painel do aluno (`student.html`)
+
+Visão geral do que já foi feito, o Individual Collaboration Contract e os links para as ferramentas externas
+(DISC, Initial Team Reflection, Weekly Reflection). O contrato individual é visível apenas para o próprio aluno,
+para os coaches e para os pesquisadores, nunca para os colegas de equipe.
+
 ## Painel de coaching (`coach.html`)
 
 Abas: **Overview**, **Collaboration Contract**, **Reflection Tool**, **DISC Reflection**,
@@ -26,7 +32,10 @@ Abas: **Overview**, **Collaboration Contract**, **Reflection Tool**, **DISC Refl
 
 * **Overview**: um cartão por grupo, com membros, progresso, última atividade e a última nota de sessão.
 * **Collaboration Contract**: criar grupos, painel ao vivo, reset de senha de aluno e exportações.
-* **Reflection Tool / DISC**: link para as ferramentas externas, que são anônimas e não alimentam o painel.
+* **Individual Contracts**: os contratos individuais de cada aluno, com exportação.
+* **Team Contract**: além do painel ao vivo, cada grupo tem rodadas, e o detalhe mostra o que mudou de uma rodada para a outra.
+* **Reflection Tools / DISC**: links para as ferramentas externas, que são anônimas e não alimentam o painel.
+* **Clear a group's data** (só para a conta dona): apaga contrato, histórico, eventos, contratos individuais e vínculos de um grupo.
 * **Session Notes**: data, grupo, presentes, notas e próximos passos. Cada coach vê apenas as próprias notas,
   e elas ficam fora de toda exportação de pesquisa.
 * **People** (só para a conta dona): criar contas de coach e de pesquisador, com senha temporária mostrada uma vez.

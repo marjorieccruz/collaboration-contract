@@ -131,6 +131,30 @@ label.f{display:block;font-weight:600;font-size:.85rem;margin:10px 0 2px}
           <tbody id="rows"></tbody></table>
       </div>
       <div id="detail" class="card hidden"></div>
+      <div class="card noprint" id="dangerBox" style="border-color:var(--danger)">
+        <b style="color:var(--danger)">Clear a group's data</b>
+        <p class="muted" style="margin:4px 0 10px">Deletes the contract, its history, the research events, the individual contracts
+          and the memberships of one group. Useful to clear test data. This cannot be undone, so type DELETE to confirm.</p>
+        <select id="dGroup"></select>
+        <input id="dConfirm" placeholder="type DELETE" size="12">
+        <label class="muted"><input type="checkbox" id="dDrop"> also remove the group itself</label>
+        <button class="danger" onclick="resetGroup()">Delete data</button>
+        <span id="dmsg" style="font-weight:700"></span>
+      </div>
+    </section>
+
+    <!-- ============ INDIVIDUAL CONTRACTS ============ -->
+    <section id="tab-individual" class="tabpane hidden">
+      <div class="card">
+        <b>Individual Collaboration Contracts</b>
+        <p class="muted" style="margin:4px 0 10px">Each student's own reflection, written before the team agreed anything.
+          Visible to the teaching team and to the researchers, never to teammates. Not used for grading.</p>
+        <button class="ghost noprint" onclick="loadSubs()">↻ Refresh</button>
+        <button class="ghost noprint" onclick="exportSubs()">↓ Export (JSON)</button>
+        <table><thead><tr><th>Student</th><th>Group</th><th>Answered</th><th>Last saved</th><th></th></tr></thead>
+          <tbody id="subRows"></tbody></table>
+      </div>
+      <div id="subDetail" class="card hidden"></div>
     </section>
 
     <!-- ============ REFLECTION TOOL ============ -->
@@ -140,11 +164,15 @@ label.f{display:block;font-weight:600;font-size:.85rem;margin:10px 0 2px}
         <p>Teams answer this questionnaire during the semester to reflect on how the collaboration is going.</p>
         <p><a href="https://ipbl-reflection-tool-7eb785.gitlab.io/?survey=fbb38208-f76c-4622-b01f-22f465ade2ac" target="_blank" rel="noopener">
           Open the weekly questionnaire ↗</a></p>
+        <h3 style="margin-top:18px">Initial Team Reflection</h3>
+        <p>A first look at how the team is working together, usually early in the project.</p>
+        <p><a href="https://ipbl-reflection-tool-7eb785.gitlab.io/?survey=1ab51069-3381-49f8-b7d9-055a64a09d06" target="_blank" rel="noopener">
+          Open the initial team reflection ↗</a></p>
         <div style="border:1px solid var(--muted);padding:10px;margin-top:12px">
           <b>Why there is no data here.</b>
-          <p class="muted" style="margin:4px 0 0">The reflection tool runs entirely in the browser and keeps the answers anonymous, with no
-          link to a student or a group. Results can be exported from the tool itself as CSV. Bringing those results into this dashboard,
-          even as group averages, is possible later and would need a decision on how the CSV is collected.</p>
+          <p class="muted" style="margin:4px 0 0">These questionnaires run entirely in the browser and keep the answers anonymous,
+          with no link to a student or a group. Results can be exported from the tool itself as CSV. Bringing them into this
+          dashboard, even as group averages, is a decision still on hold.</p>
         </div>
       </div>
     </section>
@@ -219,8 +247,8 @@ label.f{display:block;font-weight:600;font-size:.85rem;margin:10px 0 2px}
 </div>
 <script>
 const STEPS = ["Who are we","What can we do","How far","Our purpose","Good group","Good group work"];
-const TABS = [['overview','Overview'],['contract','Collaboration Contract'],['reflection','Reflection Tool'],
-              ['disc','DISC Reflection'],['notes','Session Notes'],['people','People']];
+const TABS = [['overview','Overview'],['contract','Team Contract'],['individual','Individual Contracts'],
+              ['reflection','Reflection Tools'],['disc','DISC Reflection'],['notes','Session Notes'],['people','People']];
 let G=[], ME=null, NOTES=[], tab='overview';
 const $=id=>document.getElementById(id);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -263,7 +291,7 @@ function renderTabs(){
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
   const pane=$('tab-'+tab); if(pane) pane.classList.remove('hidden');
 }
-function go(t){ tab=t; renderTabs(); if(t==='people') loadUsers(); if(t==='notes') loadNotes(); }
+function go(t){ tab=t; renderTabs(); if(t==='people') loadUsers(); if(t==='notes') loadNotes(); if(t==='individual') loadSubs(); }
 
 /* ---------- data ---------- */
 async function load(){
@@ -279,13 +307,15 @@ function fillFilter(id, key){
 }
 function fillGroupSelects(){
   const opts = G.map(g=>`<option value="${g.id}">${esc(g.name)} (${esc(g.code)})</option>`).join('');
+  const d=$('dGroup'); if(d){ const cd=d.value; d.innerHTML=opts; d.value=cd; }
+  const db=$('dangerBox'); if(db) db.classList.toggle('hidden', !ME || ME.role!=='owner');
   const a=$('nGroup'), b=$('nFilterGroup'), ca=a.value, cb=b.value;
   a.innerHTML='<option value="">Whole cohort / no specific group</option>'+opts; a.value=ca;
   b.innerHTML='<option value="">All groups</option>'+opts; b.value=cb;
 }
 function view(){ const c=$('fCourse').value, h=$('fCohort').value;
   return G.filter(g=>(!c||g.course===c)&&(!h||g.cohort===h)); }
-function refreshAll(){ render(); live(); renderNotes(); }
+function refreshAll(){ render(); live(); renderNotes(); if(tab==='individual') loadSubs(); }
 function ago(ts){
   if(!ts) return '<span class="muted">—</span>';
   const s=Math.max(0,(Date.now()-new Date(ts.replace(' ','T')+'Z'))/1000);
@@ -368,11 +398,88 @@ function show(id){
   $('detail').innerHTML = `<p class="kick">:${esc(g.code)}</p><h2 style="margin:0">${esc(st.groupName||g.name)}</h2>
     <p class="muted">Version ${row.version||0} · last saved ${row.updated_at?esc(row.updated_at)+' UTC':'never'}</p>
     <div class="grid">${cells.map(c=>`<div><h4>${c[0]}</h4><pre>${esc(c[1]||'—')}</pre></div>`).join('')}</div>
+    <div id="rounds" class="muted">loading rounds…</div>
     <p class="noprint">${canCoach()?`<button class="ghost" onclick="noteForGroup(${g.id})">+ Session note for this group</button>`:''}
     <button class="ghost" onclick="window.print()">Print</button>
     <button class="ghost" onclick="$('detail').classList.add('hidden')">Close</button></p>`;
   $('detail').classList.remove('hidden'); $('detail').scrollIntoView({behavior:'smooth'});
+  showRounds(g.id);
 }
+
+/* ---------- rounds and what changed between them ---------- */
+const FIELD_LABELS = { purpose:'Purpose', 'q3.shared':'Shared goal', 'q4.values':'Values', 'q4.examples':'Values in practice',
+  'q5.comm':'Communication', 'q5.dec':'Decisions', 'q5.conflict':'Conflict', 'q5.needs':'Needs' };
+function flat(st){
+  const a=(st||{}).answers||{}, out={};
+  out['purpose']=a.purpose||''; out['q3.shared']=(a.q3||{}).shared||'';
+  out['q4.values']=((a.q4||{}).values||[]).join(', '); out['q4.examples']=(a.q4||{}).examples||'';
+  ['comm','dec','conflict','needs'].forEach(k=>out['q5.'+k]=(a.q5||{})[k]||'');
+  ((st||{}).members||[]).forEach(m=>{
+    const q1=(a.q1||{})[m.playerId]||{}, q2=(a.q2||{})[m.playerId]||{}, q3=(a.q3||{})[m.playerId]||{};
+    out['role · '+m.name]=q1.role||''; out['strengths · '+m.name]=q2.str||''; out['weaknesses · '+m.name]=q2.weak||'';
+    out['personal goal · '+m.name]=q3.goal||''; out['commitment · '+m.name]=q3.commit?q3.commit+'/5':'';
+  });
+  return out;
+}
+async function showRounds(gid){
+  const r = await api('contract_rounds', { group:gid });
+  const el=$('rounds'); if(!el) return;
+  if(r.error || !r.rounds || !r.rounds.length){ el.innerHTML='<p class="muted">No saved rounds yet.</p>'; return; }
+  let h = '<h3 style="margin-top:18px">Rounds</h3><table><thead><tr><th>Round</th><th>First save</th><th>Last save</th><th>Saves</th></tr></thead><tbody>';
+  r.rounds.forEach(x=>{ h+=`<tr><td>${x.round}</td><td>${esc(x.first_saved)}</td><td>${esc(x.last_saved)}</td><td>${x.saves}</td></tr>`; });
+  h += '</tbody></table>';
+  const ks = Object.keys(r.states).map(Number).sort((a,b)=>a-b);
+  for(let i=1;i<ks.length;i++){
+    const A=flat(r.states[ks[i-1]]), B=flat(r.states[ks[i]]);
+    const keys=[...new Set([...Object.keys(A),...Object.keys(B)])].filter(k=>(A[k]||'')!==(B[k]||''));
+    h += `<h3>What changed from round ${ks[i-1]} to round ${ks[i]}</h3>`;
+    h += keys.length ? '<div class="grid">'+keys.map(k=>`<div><h4>${esc(FIELD_LABELS[k]||k)}</h4>
+        <pre><span class="muted">before:</span> ${esc(A[k]||'—')}</pre>
+        <pre style="margin-top:6px"><b>after:</b> ${esc(B[k]||'—')}</pre></div>`).join('')+'</div>'
+      : '<p class="muted">Nothing changed between these rounds.</p>';
+  }
+  if(canCoach()) h += `<p class="noprint"><button class="ghost" onclick="newRound(${gid})">+ Start a new round for this group</button>
+    <span class="muted">The team keeps its answers and revises them; the previous round stays in the history.</span></p>`;
+  el.innerHTML = h;
+}
+async function newRound(gid){
+  const r = await api('contract_new_round', { group:gid });
+  if(r.error) return alert(r.error);
+  showRounds(gid);
+}
+
+/* ---------- individual contracts ---------- */
+let SUBS=[];
+async function loadSubs(){
+  const r = await api('t_submissions', { instrument:'individual_contract' });
+  SUBS = r.submissions||[];
+  const f=$('fCourse').value, h=$('fCohort').value;
+  const list = SUBS.filter(s=>(!f||s.course===f)&&(!h||s.cohort===h));
+  $('subRows').innerHTML = list.map(s=>{
+    const st=s.state||{}, keys=['role','why','strengths','weaknesses','develop','commit','commitNote','goal','values','valuesHow','comm','dec','conflict','needs'];
+    const answered = keys.filter(k=>Array.isArray(st[k])?st[k].length:(st[k]!==undefined&&st[k]!=='')).length;
+    return `<tr><td><b>${esc(s.user_name||s.user_email)}</b><br><span class="muted">${esc(s.user_email)}</span></td>
+      <td>${esc(s.group_name||'—')}<br><span class="muted">${esc(s.course||'')} ${esc(s.cohort||'')}</span></td>
+      <td>${answered} / ${keys.length}</td><td>${ago(s.updated_at)}</td>
+      <td><button class="ghost" onclick="showSub(${s.id})">View</button></td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="muted">No individual contracts yet.</td></tr>';
+}
+function showSub(id){
+  const s=SUBS.find(x=>x.id==id); if(!s) return;
+  const st=s.state||{};
+  const rows=[['Role in the team',st.role],['Why they are here',st.why],['Strengths and assets',st.strengths],
+    ['Weaknesses and risks',st.weaknesses],['Wants to develop',st.develop],
+    ['Time and energy',st.commit?st.commit+' / 5':''],['In their own words',st.commitNote],
+    ['Shared goal, in their words',st.goal],['Values',(st.values||[]).join(', ')],['Values in practice',st.valuesHow],
+    ['Communication',st.comm],['Decisions',st.dec],['Conflict',st.conflict],['What they need',st.needs]];
+  $('subDetail').innerHTML = `<h2 style="margin:0">${esc(s.user_name||s.user_email)}</h2>
+    <p class="muted">${esc(s.group_name||'no group')} · last saved ${s.updated_at?esc(s.updated_at)+' UTC':'never'} · version ${s.version}</p>
+    <div class="grid">${rows.map(r=>`<div><h4>${esc(r[0])}</h4><pre>${esc(r[1]||'—')}</pre></div>`).join('')}</div>
+    <p class="noprint"><button class="ghost" onclick="window.print()">Print</button>
+    <button class="ghost" onclick="$('subDetail').classList.add('hidden')">Close</button></p>`;
+  $('subDetail').classList.remove('hidden'); $('subDetail').scrollIntoView({behavior:'smooth'});
+}
+function exportSubs(){ dl('individual-contracts.json', JSON.stringify(SUBS, null, 2), 'application/json'); }
 
 /* ---------- groups / passwords / exports ---------- */
 async function createGroups(){
@@ -456,6 +563,15 @@ async function createUser(){
   if(r.error) return $('umsg').textContent=r.error;
   $('umsg').innerHTML='✓ Account ready. Temporary password (shown once): <code>'+esc(r.password)+'</code>';
   $('uEmail').value=''; $('uName').value=''; loadUsers();
+}
+async function resetGroup(){
+  const gid=+$('dGroup').value, g=G.find(x=>x.id==gid);
+  if(!g) return;
+  if(!confirm('Delete all data of '+g.name+' ('+g.code+')? This cannot be undone.')) return;
+  const r = await api('t_reset_group', { group:gid, confirm:$('dConfirm').value.trim(), dropGroup:$('dDrop').checked });
+  if(r.error) return $('dmsg').textContent=r.error;
+  $('dmsg').textContent = '✓ cleared: ' + Object.entries(r.deleted).map(([k,v])=>k.replace('cc_','')+' '+v).join(', ');
+  $('dConfirm').value=''; load();
 }
 async function setRole(id, role){ const r=await api('u_role',{ id, role }); if(r.error) alert(r.error); loadUsers(); }
 

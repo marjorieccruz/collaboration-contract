@@ -140,14 +140,26 @@ figcaption{font-family:'Inter',sans-serif; font-size:.78rem; color:var(--muted);
 <div id="consent">
   <div class="consent-box">
     <h2>Participant Consent</h2>
-    <p class="body-txt">By completing the <strong>Collaboration Contract</strong> you agree that we may collect and
-      process your responses for research on how student groups form and collaborate. Participation is
-      <strong>voluntary</strong>. You must be at least <strong>18 years old</strong> to take part. You can withdraw
-      at any time, without giving reasons and without any disadvantage.</p>
-    <p class="body-txt">Your data is stored securely and used <strong>for research purposes only</strong>. All data
-      will be <strong>anonymised</strong> before analysis and publication. Collected data includes your responses, the
-      time you spend on each section, and edit activity. Anonymised data may be published on OSF/Zenodo under a CC-BY
-      licence. Each group member consents individually on the next screen.</p>
+    <p class="body-txt">By using this platform you agree that we may collect and process your responses for research on how
+      student teams form and collaborate. Participation is <strong>voluntary</strong> and you must be at least
+      <strong>18 years old</strong>. You can skip questions and stop at any point, without giving reasons and without
+      consequences for your studies.</p>
+    <p class="body-txt"><strong>What we collect.</strong> Your account details (name and e-mail), the group you join, your answers
+      in the Individual Collaboration Contract and in the Team Collaboration Contract, including later revisions, and activity data
+      such as the time spent on each section and when answers were edited.</p>
+    <p class="body-txt"><strong>Who can see what.</strong> Your <strong>individual</strong> answers are visible to you, to the
+      teaching team and to the researchers of this project; your teammates do not see them. The <strong>team</strong> contract is
+      visible to your group, to the teaching team and to the researchers. Coaches keep private notes of coaching sessions, visible
+      only to the coach who wrote them and never part of the research dataset.</p>
+    <p class="body-txt"><strong>Assessment.</strong> The data stored here is not used for grading. Only the file your team exports
+      and hands in may be used for assessment.</p>
+    <p class="body-txt"><strong>External tools.</strong> The DISC reflection and the team reflection questionnaires run on a
+      separate, anonymous tool. Those answers stay in your browser, are not linked to your name or your group, and never reach this
+      platform.</p>
+    <p class="body-txt"><strong>Storage and use.</strong> Data is stored on a server in the European Union under the control of the
+      project team, used <strong>for research purposes only</strong>, and <strong>anonymised</strong> before analysis and before any
+      publication. Anonymised data may be published on OSF or Zenodo under a CC-BY licence.</p>
+    <p class="body-txt"><strong>Your rights.</strong> You can ask at any time to see, correct or delete your data.</p>
     <p class="body-txt muted">Contact person: <strong>Marjorie Cristina Da Cruz</strong> ·
       <a href="mailto:marjorie.da-cruz@it-u.at">marjorie.da-cruz@it-u.at</a></p>
     <button onclick="closeConsent()">I understand — continue</button>
@@ -360,12 +372,13 @@ figcaption{font-family:'Inter',sans-serif; font-size:.78rem; color:var(--muted);
 <div class="cloudbar cloud-only hidden noprint">
   <span class="whoami"></span><span>· group <b class="groupcode"></b></span>
   <span id="cloudStatus" style="color:var(--accent-2)"></span>
+  <button class="ghost" onclick="location.href='student.html'">My space</button>
   <button class="ghost" onclick="CLOUD.reload()">↻</button>
   <button class="ghost" onclick="CLOUD.signOut()">Sign out</button>
 </div>
 <script>
 /* ============ CONFIG ============ */
-const CONFIG = { endpoint:'', token:'', appVersion:'3.3.0', schemaVersion:4, deckVersion:'1.1' };
+const CONFIG = { endpoint:'', token:'', appVersion:'3.4.0', schemaVersion:4, deckVersion:'1.1' };
 const ACCENT_FALLBACK = '#4a2fe0';
 const VALUES = ["Trust","Respect","Open communication","Reliability","Accountability",
   "Fairness","Inclusivity","Ambition","Curiosity","Mutual support","Honesty","Punctuality"];
