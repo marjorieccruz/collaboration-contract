@@ -67,7 +67,8 @@ label.f{display:block;font-weight:600;font-size:.85rem;margin:10px 0 2px}
   </div>
 
   <div id="app" class="hidden">
-    <p class="muted">Signed in as <b id="me"></b> <span class="pill" id="roleTag"></span> ·
+    <p class="muted">Signed in as <b id="me"></b> <span class="pill" id="roleTag"></span><span id="scopeNote"></span> ·
+      <a href="admin.html" id="adminLink" class="hidden">Administration</a> ·
       <a href="#" onclick="api('logout').then(()=>location.reload());return false">sign out</a></p>
 
     <div class="toolbar noprint">
@@ -131,16 +132,6 @@ label.f{display:block;font-weight:600;font-size:.85rem;margin:10px 0 2px}
           <tbody id="rows"></tbody></table>
       </div>
       <div id="detail" class="card hidden"></div>
-      <div class="card noprint" id="dangerBox" style="border-color:var(--danger)">
-        <b style="color:var(--danger)">Clear a group's data</b>
-        <p class="muted" style="margin:4px 0 10px">Deletes the contract, its history, the research events, the individual contracts
-          and the memberships of one group. Useful to clear test data. This cannot be undone, so type DELETE to confirm.</p>
-        <select id="dGroup"></select>
-        <input id="dConfirm" placeholder="type DELETE" size="12">
-        <label class="muted"><input type="checkbox" id="dDrop"> also remove the group itself</label>
-        <button class="danger" onclick="resetGroup()">Delete data</button>
-        <span id="dmsg" style="font-weight:700"></span>
-      </div>
     </section>
 
     <!-- ============ INDIVIDUAL CONTRACTS ============ -->
@@ -224,31 +215,12 @@ label.f{display:block;font-weight:600;font-size:.85rem;margin:10px 0 2px}
       </div>
     </section>
 
-    <!-- ============ PEOPLE ============ -->
-    <section id="tab-people" class="tabpane hidden">
-      <div class="card">
-        <b>Add a coach or researcher</b>
-        <p class="muted" style="margin:4px 0 10px">Creates the account and shows a temporary password once. Pass it on, and ask the person
-          to change it later. Coaches see groups, contracts and their own session notes. Researchers see groups, contracts and the exports,
-          never the notes.</p>
-        <input id="uEmail" type="email" placeholder="e-mail" size="26">
-        <input id="uName" placeholder="name (optional)" size="18">
-        <select id="uRole"><option value="coach">coach</option><option value="researcher">researcher</option></select>
-        <button onclick="createUser()">Create account</button>
-        <div id="umsg" style="font-weight:700;margin-top:8px"></div>
-      </div>
-      <div class="card">
-        <b>Accounts</b>
-        <table><thead><tr><th>Name</th><th>E-mail</th><th>Role</th><th>Since</th></tr></thead><tbody id="uRows"></tbody></table>
-        <p class="muted" id="uStudents"></p>
-      </div>
-    </section>
   </div>
 </div>
 <script>
 const STEPS = ["Who are we","What can we do","How far","Our purpose","Good group","Good group work"];
 const TABS = [['overview','Overview'],['contract','Team Contract'],['individual','Individual Contracts'],
-              ['reflection','Reflection Tools'],['disc','DISC Reflection'],['notes','Session Notes'],['people','People']];
+              ['reflection','Reflection Tools'],['disc','DISC Reflection'],['notes','Session Notes']];
 let G=[], ME=null, NOTES=[], tab='overview';
 const $=id=>document.getElementById(id);
 const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -279,23 +251,24 @@ async function init(){
   ME = r.user;
   $('me').textContent=ME.email; $('roleTag').textContent=ME.role;
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  if(ME.role==='owner') $('adminLink').classList.remove('hidden');
   renderTabs(); load(); schedule();
 }
 function canCoach(){ return ME && (ME.role==='owner' || ME.role==='coach'); }
 function renderTabs(){
   $('tabs').innerHTML = TABS.filter(t=>{
-    if(t[0]==='people') return ME.role==='owner';
     if(t[0]==='notes') return canCoach();
     return true;
   }).map(t=>`<button class="${t[0]===tab?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');
   document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
   const pane=$('tab-'+tab); if(pane) pane.classList.remove('hidden');
 }
-function go(t){ tab=t; renderTabs(); if(t==='people') loadUsers(); if(t==='notes') loadNotes(); if(t==='individual') loadSubs(); }
+function go(t){ tab=t; renderTabs(); if(t==='notes') loadNotes(); if(t==='individual') loadSubs(); }
 
 /* ---------- data ---------- */
 async function load(){
   const r = await api('t_overview'); G = r.groups||[];
+  $('scopeNote').textContent = r.scoped ? ' · showing only the groups assigned to you' : '';
   fillFilter('fCourse','course'); fillFilter('fCohort','cohort');
   fillGroupSelects();
   render(); live();
@@ -307,8 +280,6 @@ function fillFilter(id, key){
 }
 function fillGroupSelects(){
   const opts = G.map(g=>`<option value="${g.id}">${esc(g.name)} (${esc(g.code)})</option>`).join('');
-  const d=$('dGroup'); if(d){ const cd=d.value; d.innerHTML=opts; d.value=cd; }
-  const db=$('dangerBox'); if(db) db.classList.toggle('hidden', !ME || ME.role!=='owner');
   const a=$('nGroup'), b=$('nFilterGroup'), ca=a.value, cb=b.value;
   a.innerHTML='<option value="">Whole cohort / no specific group</option>'+opts; a.value=ca;
   b.innerHTML='<option value="">All groups</option>'+opts; b.value=cb;
@@ -548,32 +519,6 @@ async function deleteNote(){
   clearNote(); await loadNotes();
 }
 
-/* ---------- people ---------- */
-async function loadUsers(){
-  const r = await api('u_list'); if(r.error) return;
-  $('uRows').innerHTML=(r.users||[]).map(u=>`<tr><td>${esc(u.name||'')}</td><td>${esc(u.email)}</td>
-     <td>${u.role==='owner'?'<b>owner</b>':`<select onchange="setRole(${u.id}, this.value)">
-       ${['coach','researcher','student'].map(x=>`<option ${x===u.role?'selected':''}>${x}</option>`).join('')}</select>`}</td>
-     <td class="muted">${esc((u.created_at||'').slice(0,10))}</td></tr>`).join('')
-     || '<tr><td colspan="4" class="muted">No coach or researcher accounts yet.</td></tr>';
-  $('uStudents').textContent=(r.studentCount||0)+' student accounts.';
-}
-async function createUser(){
-  const r = await api('u_create', { email:$('uEmail').value.trim(), name:$('uName').value.trim(), role:$('uRole').value });
-  if(r.error) return $('umsg').textContent=r.error;
-  $('umsg').innerHTML='✓ Account ready. Temporary password (shown once): <code>'+esc(r.password)+'</code>';
-  $('uEmail').value=''; $('uName').value=''; loadUsers();
-}
-async function resetGroup(){
-  const gid=+$('dGroup').value, g=G.find(x=>x.id==gid);
-  if(!g) return;
-  if(!confirm('Delete all data of '+g.name+' ('+g.code+')? This cannot be undone.')) return;
-  const r = await api('t_reset_group', { group:gid, confirm:$('dConfirm').value.trim(), dropGroup:$('dDrop').checked });
-  if(r.error) return $('dmsg').textContent=r.error;
-  $('dmsg').textContent = '✓ cleared: ' + Object.entries(r.deleted).map(([k,v])=>k.replace('cc_','')+' '+v).join(', ');
-  $('dConfirm').value=''; load();
-}
-async function setRole(id, role){ const r=await api('u_role',{ id, role }); if(r.error) alert(r.error); loadUsers(); }
 
 init();
 </script>

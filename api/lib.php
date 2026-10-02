@@ -60,6 +60,9 @@ function cc_schema(PDO $db): array {
     "CREATE TABLE IF NOT EXISTS cc_submission_history (
        id $ai, submission_id INT NOT NULL, user_id INT NOT NULL, instrument VARCHAR(40) NOT NULL,
        version INT NOT NULL, state $big NOT NULL, saved_at DATETIME NOT NULL)$eng",
+    "CREATE TABLE IF NOT EXISTS cc_group_coaches (
+       group_id INT NOT NULL, user_id INT NOT NULL, assigned_at DATETIME NOT NULL,
+       PRIMARY KEY (group_id, user_id))$eng",
     "CREATE TABLE IF NOT EXISTS cc_meta (
        k VARCHAR(50) PRIMARY KEY, v VARCHAR(190) NOT NULL)$eng",
     "CREATE TABLE IF NOT EXISTS cc_events (
@@ -79,7 +82,7 @@ function cc_ensure_schema(PDO $db): void {
     $st = $db->query("SELECT v FROM cc_meta WHERE k = 'schema_version'");
     $v = (int)($st->fetchColumn() ?: 0);
   } catch (Throwable $e) { $v = 0; }
-  if ($v >= 3) return;
+  if ($v >= 4) return;
   foreach (cc_schema($db) as $sql) { try { $db->exec($sql); } catch (Throwable $e) {} }
   // role column on users: owner | coach | researcher | student
   try { $db->exec("ALTER TABLE cc_users ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'student'"); } catch (Throwable $e) {}
@@ -89,9 +92,9 @@ function cc_ensure_schema(PDO $db): void {
   try { $db->exec("ALTER TABLE cc_contract_history ADD COLUMN round INT NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
   try {
     $st = $db->prepare('INSERT INTO cc_meta (k, v) VALUES (?, ?)');
-    $st->execute(['schema_version', '3']);
+    $st->execute(['schema_version', '4']);
   } catch (Throwable $e) {
-    try { $db->prepare('UPDATE cc_meta SET v = ? WHERE k = ?')->execute(['3', 'schema_version']); } catch (Throwable $e2) {}
+    try { $db->prepare('UPDATE cc_meta SET v = ? WHERE k = ?')->execute(['4', 'schema_version']); } catch (Throwable $e2) {}
   }
 }
 
@@ -130,6 +133,18 @@ function need_user(): array { $u = current_user(); if (!$u) fail('not authentica
 function is_staff(array $u): bool { return in_array($u['role'], ['owner', 'coach', 'researcher'], true); }
 function need_staff(): array { $u = need_user(); if (!is_staff($u)) fail('not allowed', 403); return $u; }
 function need_coach(): array { $u = need_user(); if (!in_array($u['role'], ['owner', 'coach'], true)) fail('not allowed', 403); return $u; }
+/* Groups a coach may see. null = every group (owner, researcher, or a coach with no assignment yet). */
+function coach_scope(array $u): ?array {
+  if ($u['role'] !== 'coach') return null;
+  $st = cc_db()->prepare('SELECT group_id FROM cc_group_coaches WHERE user_id = ?');
+  $st->execute([$u['id']]);
+  $ids = array_map('intval', array_column($st->fetchAll(), 'group_id'));
+  return $ids ? $ids : null;
+}
+function in_scope(array $u, int $gid): bool {
+  $s = coach_scope($u);
+  return $s === null || in_array($gid, $s, true);
+}
 function need_owner(): array { $u = need_user(); if ($u['role'] !== 'owner') fail('not allowed', 403); return $u; }
 function need_teacher(): array { return need_staff(); }
 

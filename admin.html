@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Administration · iPBL</title>
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{color-scheme:light;--accent:#4a2fe0;--accent-2:#1a6f5a;--ink:#141414;--bg:#f2efe6;--card:#ffffff;
+  --muted:#5d574d;--danger:#a32a31;--field:#faf8f2;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 Inter,sans-serif;padding:16px}
+.wrap{max-width:1000px;margin:0 auto}
+h1{font-family:VT323,monospace;font-size:2.6rem;margin:.2em 0}
+h2{font-family:VT323,monospace;font-size:1.8rem;margin:.2em 0}
+.kick{font-family:VT323,monospace;color:var(--accent);font-size:1.2rem;margin:0}
+.card{background:var(--card);border:2px solid var(--ink);padding:16px;margin:12px 0;box-shadow:4px 4px 0 var(--ink)}
+input,select{font:inherit;padding:8px;border:2px solid var(--ink);background:var(--field);color:var(--ink);max-width:100%}
+button{font:600 .9rem Inter,sans-serif;padding:8px 14px;border:2px solid var(--ink);background:var(--accent);color:#fff;cursor:pointer;margin:4px 4px 4px 0}
+button.ghost{background:transparent;color:var(--ink)}
+button.danger{background:var(--danger)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--muted);vertical-align:top}
+code{font-size:1rem;font-weight:700;color:var(--accent)}
+.hidden{display:none}
+.muted{color:var(--muted)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0}
+.tabs button{margin:0;background:transparent;color:var(--ink)}
+.tabs button.on{background:var(--accent);color:#fff}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+.kpi{border:2px solid var(--ink);padding:10px}.kpi b{display:block;font:2.1rem/1 VT323,monospace;color:var(--accent)}
+.danger-card{border-color:var(--danger)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kick">:administration</p>
+  <h1>iPBL Admin</h1>
+
+  <div id="login" class="card hidden">
+    <p>This page is for the owner account.</p>
+    <input id="em" type="email" placeholder="e-mail"> <input id="pw" type="password" placeholder="password" onkeydown="if(event.key==='Enter')signIn()">
+    <button onclick="signIn()">Sign in</button>
+    <p id="lmsg" style="font-weight:700"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <p class="muted">Signed in as <b id="me"></b> ·
+      <a href="coach.html">Coaching dashboard</a> ·
+      <a href="#" onclick="api('logout').then(()=>location.reload());return false">sign out</a></p>
+
+    <div class="tabs" id="tabs"></div>
+
+    <!-- PEOPLE -->
+    <section id="tab-people" class="pane">
+      <div class="card">
+        <b>Add a coach or researcher</b>
+        <p class="muted" style="margin:4px 0 10px">Creates the account and shows a temporary password once. Pass it on, and ask the
+          person to change it later. Coaches see groups, contracts, individual contracts and their own session notes. Researchers see
+          the same except the session notes, and cannot create groups.</p>
+        <input id="uEmail" type="email" placeholder="e-mail" size="26">
+        <input id="uName" placeholder="name (optional)" size="18">
+        <select id="uRole"><option value="coach">coach</option><option value="researcher">researcher</option></select>
+        <button onclick="createUser()">Create account</button>
+        <div id="umsg" style="font-weight:700;margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <b>Accounts</b>
+        <table><thead><tr><th>Name</th><th>E-mail</th><th>Role</th><th>Since</th></tr></thead><tbody id="uRows"></tbody></table>
+        <p class="muted" id="uStudents"></p>
+      </div>
+      <div class="card">
+        <b>Reset a password</b>
+        <p class="muted" style="margin:4px 0 10px">Works for students, coaches and researchers. Generates a temporary password.</p>
+        <input id="rEmail" type="email" placeholder="e-mail" size="26">
+        <button class="ghost" onclick="resetPw()">Reset password</button>
+        <span id="rmsg" style="font-weight:700"></span>
+      </div>
+    </section>
+
+    <!-- SYSTEM -->
+    <section id="tab-system" class="pane hidden">
+      <div class="card">
+        <b>What is in the database</b>
+        <button class="ghost noprint" onclick="loadStats()" style="float:right">↻ Refresh</button>
+        <div class="kpis" id="stats"></div>
+        <p class="muted" id="sysline"></p>
+      </div>
+      <div class="card">
+        <b>Backups and exports</b>
+        <p class="muted" style="margin:4px 0 10px">Session notes are never included. For a full backup of the database, use
+          phpMyAdmin in your hosting panel.</p>
+        <button class="ghost" onclick="exp('contracts')">↓ Contracts (JSON)</button>
+        <button class="ghost" onclick="exp('history')">↓ Contract history (JSON)</button>
+        <button class="ghost" onclick="exp('individual')">↓ Individual contracts (JSON)</button>
+        <button class="ghost" onclick="exp('events')">↓ Research events (JSON)</button>
+      </div>
+    </section>
+
+    <!-- DATA -->
+    <section id="tab-data" class="pane hidden">
+      <div class="card">
+        <b>Groups</b>
+        <button class="ghost noprint" onclick="load()" style="float:right">↻ Refresh</button>
+        <p class="muted" style="margin:4px 0 10px">A coach with no group assigned sees every group. As soon as you assign at
+          least one group to a coach, that coach sees only the assigned ones, in the dashboard, in the individual contracts and in
+          the activity feed. Researchers and the owner always see everything.</p>
+        <table><thead><tr><th>Group</th><th>Code</th><th>Course</th><th>Members</th><th>Contract</th><th>Individual</th><th>Coaches</th></tr></thead>
+          <tbody id="gRows"></tbody></table>
+      </div>
+      <div class="card danger-card">
+        <b style="color:var(--danger)">Clear a group's data</b>
+        <p class="muted" style="margin:4px 0 10px">Deletes the team contract and its history, the research events, the individual
+          contracts and the memberships of one group. Students who were in the group will have to enter the code again. This cannot
+          be undone, so type DELETE to confirm.</p>
+        <select id="dGroup"></select>
+        <input id="dConfirm" placeholder="type DELETE" size="12">
+        <label class="muted"><input type="checkbox" id="dDrop"> also remove the group itself</label>
+        <button class="danger" onclick="resetGroup()">Delete data</button>
+        <div id="dmsg" style="font-weight:700;margin-top:8px"></div>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+const TABS=[['people','People'],['data','Groups & data'],['system','System']];
+let G=[], ME=null, tab='people';
+const $=id=>document.getElementById(id);
+const esc=s=>(s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(a, body){
+  try{
+    const r = await fetch('api/?a='+a, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body||{}) });
+    let d={}; try{ d=await r.json(); }catch(e){}
+    return r.ok ? d : { error:d.error||('HTTP '+r.status), status:r.status };
+  }catch(e){ return { error:'offline' }; }
+}
+async function signIn(){
+  const r = await api('login', { email:$('em').value.trim(), password:$('pw').value });
+  if(r.error) $('lmsg').textContent=r.error; else init();
+}
+async function init(){
+  if(!location.protocol.startsWith('http')){ $('login').classList.remove('hidden');
+    $('login').innerHTML='<p>This page needs the server.</p>'; return; }
+  const r = await api('me');
+  if(!r.user){ $('login').classList.remove('hidden'); return; }
+  if(r.user.role!=='owner'){ $('login').classList.remove('hidden');
+    $('lmsg').innerHTML='This page is only for the owner account. <a href="coach.html">Go to the coaching dashboard</a>.'; return; }
+  ME=r.user; $('me').textContent=ME.email;
+  $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+  renderTabs(); load(); loadUsers(); loadStats();
+}
+function renderTabs(){
+  $('tabs').innerHTML = TABS.map(t=>`<button class="${t[0]===tab?'on':''}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');
+  document.querySelectorAll('.pane').forEach(p=>p.classList.add('hidden'));
+  $('tab-'+tab).classList.remove('hidden');
+}
+function go(t){ tab=t; renderTabs(); if(t==='system') loadStats(); if(t==='data') load(); if(t==='people') loadUsers(); }
+
+/* ---------- people ---------- */
+async function loadUsers(){
+  const r = await api('u_list'); if(r.error) return;
+  $('uRows').innerHTML=(r.users||[]).map(u=>`<tr><td>${esc(u.name||'')}</td><td>${esc(u.email)}</td>
+     <td>${u.role==='owner'?'<b>owner</b>':`<select onchange="setRole(${u.id}, this.value)">
+       ${['coach','researcher','student'].map(x=>`<option ${x===u.role?'selected':''}>${x}</option>`).join('')}</select>`}</td>
+     <td class="muted">${esc((u.created_at||'').slice(0,10))}</td></tr>`).join('')
+     || '<tr><td colspan="4" class="muted">No coach or researcher accounts yet.</td></tr>';
+  $('uStudents').textContent=(r.studentCount||0)+' student accounts.';
+}
+async function createUser(){
+  const r = await api('u_create', { email:$('uEmail').value.trim(), name:$('uName').value.trim(), role:$('uRole').value });
+  if(r.error) return $('umsg').textContent=r.error;
+  $('umsg').innerHTML='✓ Account ready. Temporary password (shown once): <code>'+esc(r.password)+'</code>';
+  $('uEmail').value=''; $('uName').value=''; loadUsers();
+}
+async function setRole(id, role){ const r=await api('u_role',{ id, role }); if(r.error) alert(r.error); loadUsers(); }
+async function resetPw(){
+  const r = await api('t_reset_password', { email:$('rEmail').value.trim() });
+  $('rmsg').textContent = r.error ? r.error : 'New password: '+r.password;
+}
+
+/* ---------- groups and data ---------- */
+let COACHES=[];
+async function load(){
+  const [o, s, u] = await Promise.all([api('t_overview'), api('t_submissions', { instrument:'individual_contract' }), api('u_list')]);
+  G = o.groups||[];
+  COACHES = (u.users||[]).filter(x=>x.role==='coach'||x.role==='owner');
+  const subs = s.submissions||[];
+  $('gRows').innerHTML = G.map(g=>{
+    const c=g.contract, n=subs.filter(x=>String(x.group_id)===String(g.id)).length;
+    return `<tr><td><b>${esc(g.name)}</b></td><td><code>${esc(g.code)}</code></td>
+      <td>${esc(g.course||'')} ${esc(g.cohort||'')}</td><td>${g.members.length}</td>
+      <td>${c?('version '+c.version+' · round '+(c.round||1)):'<span class="muted">none</span>'}</td>
+      <td>${n}</td>
+      <td>${COACHES.length ? COACHES.map(c=>`<label style="display:block;font-size:.85rem">
+            <input type="checkbox" data-g="${g.id}" data-c="${c.id}" ${(g.coaches||[]).some(x=>x.id===c.id)?'checked':''}
+              onchange="saveAssign(${g.id})"> ${esc(c.name||c.email)}</label>`).join('')
+          : '<span class="muted">no coach accounts yet</span>'}
+        <span class="muted" id="am-${g.id}"></span></td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="muted">No groups yet. Create them in the coaching dashboard.</td></tr>';
+  $('dGroup').innerHTML = G.map(g=>`<option value="${g.id}">${esc(g.name)} (${esc(g.code)})</option>`).join('');
+}
+async function saveAssign(gid){
+  const ids=[...document.querySelectorAll(`input[data-g="${gid}"]:checked`)].map(x=>+x.dataset.c);
+  const r = await api('a_assign', { group:gid, coaches:ids });
+  const el=$('am-'+gid); if(el){ el.textContent = r.error ? r.error : '✓'; setTimeout(()=>{el.textContent='';},2000); }
+}
+async function resetGroup(){
+  const gid=+$('dGroup').value, g=G.find(x=>x.id==gid);
+  if(!g) return;
+  if(!confirm('Delete all data of '+g.name+' ('+g.code+')? This cannot be undone.')) return;
+  const r = await api('t_reset_group', { group:gid, confirm:$('dConfirm').value.trim(), dropGroup:$('dDrop').checked });
+  if(r.error) return $('dmsg').textContent=r.error;
+  $('dmsg').textContent='✓ cleared: '+Object.entries(r.deleted).map(([k,v])=>k.replace('cc_','')+' '+v).join(', ');
+  $('dConfirm').value=''; load(); loadStats();
+}
+
+/* ---------- system ---------- */
+async function loadStats(){
+  const r = await api('a_stats'); if(r.error) return;
+  const cards=[['Accounts',r.users],['Students',r.students],['Coaches',r.coaches],['Researchers',r.researchers],
+    ['Groups',r.groups],['Team contracts',r.contracts],['Contract saves',r.contractSaves],
+    ['Individual contracts',r.individualContracts],['Research events',r.events],['Session notes',r.sessionNotes]];
+  $('stats').innerHTML = cards.map(c=>`<div class="kpi"><b>${c[1]}</b>${c[0]}</div>`).join('');
+  $('sysline').textContent = 'Database schema version '+r.schemaVersion+' · server time '+r.serverTime+' UTC';
+}
+function dl(name, text){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'application/json'})); a.download=name; a.click(); }
+async function exp(what){
+  if(what==='contracts'){ const r=await api('t_overview'); dl('contracts.json', JSON.stringify(r.groups||[], null, 2)); return; }
+  if(what==='individual'){ const r=await api('t_submissions',{instrument:'individual_contract'}); dl('individual-contracts.json', JSON.stringify(r.submissions||[], null, 2)); return; }
+  const r = await api('t_export', { what: what==='history' ? 'history' : 'events' });
+  dl(what+'.json', JSON.stringify(r.rows||[], null, 2));
+}
+init();
+</script>
+</body>
+</html>

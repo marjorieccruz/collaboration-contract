@@ -76,7 +76,7 @@ switch ($a) {
   }
   case 'contract_get': {
     $u = need_user(); $gid = (int)($in['group'] ?? 0);
-    if (!is_member((int)$u['id'], $gid) && !(int)$u['is_teacher']) fail('not allowed', 403);
+    if (!is_member((int)$u['id'], $gid) && !(is_staff($u) && in_scope($u, $gid))) fail('not allowed', 403);
     $st = $db->prepare('SELECT state, version FROM cc_contracts WHERE group_id = ?'); $st->execute([$gid]);
     $r = $st->fetch();
     out(['state' => $r ? json_decode($r['state'], true) : new stdClass(), 'version' => $r ? (int)$r['version'] : 0]);
@@ -121,17 +121,25 @@ switch ($a) {
 
   /* ---------------- TEACHER ---------------- */
   case 't_overview': {
-    need_staff();
+    $u = need_staff();
+    $scope = coach_scope($u);
     $groups = $db->query('SELECT id, code, name, course, cohort, created_at FROM cc_groups ORDER BY course, id')->fetchAll();
+    if ($scope !== null) $groups = array_values(array_filter($groups, fn($g) => in_array((int)$g['id'], $scope, true)));
     $con = []; foreach ($db->query('SELECT group_id, state, version, updated_at FROM cc_contracts') as $r)
       $con[$r['group_id']] = ['state' => json_decode($r['state'], true), 'version' => (int)$r['version'], 'updated_at' => $r['updated_at']];
     $mem = []; foreach ($db->query('SELECT m.group_id, u.email, u.name FROM cc_memberships m JOIN cc_users u ON u.id = m.user_id') as $r)
       $mem[$r['group_id']][] = ['email' => $r['email'], 'name' => $r['name']];
-    foreach ($groups as &$g) { $g['contract'] = $con[$g['id']] ?? null; $g['members'] = $mem[$g['id']] ?? []; }
-    out(['groups' => $groups]);
+    $coaches = [];
+    foreach ($db->query('SELECT c.group_id, u.id, u.name, u.email FROM cc_group_coaches c JOIN cc_users u ON u.id = c.user_id') as $r)
+      $coaches[$r['group_id']][] = ['id' => (int)$r['id'], 'name' => $r['name'], 'email' => $r['email']];
+    foreach ($groups as &$g) {
+      $g['contract'] = $con[$g['id']] ?? null; $g['members'] = $mem[$g['id']] ?? [];
+      $g['coaches'] = $coaches[$g['id']] ?? [];
+    }
+    out(['groups' => $groups, 'scoped' => $scope !== null]);
   }
   case 't_activity': {
-    need_staff();
+    $u = need_staff(); $scope = coach_scope($u);
     $since = gmdate('Y-m-d H:i:s', time() - 600);
     $st = $db->prepare('SELECT COUNT(DISTINCT uid) FROM (SELECT user_id AS uid FROM cc_events WHERE created_at >= ?
       UNION SELECT saved_by AS uid FROM cc_contract_history WHERE saved_at >= ?) t'); $st->execute([$since, $since]);
@@ -143,7 +151,13 @@ switch ($a) {
     $feed = array_map(function($r){ $p = json_decode($r['payload'], true) ?: [];
       return ['event'=>$r['event'], 'at'=>$r['created_at'], 'group'=>$r['gname'], 'code'=>$r['code'], 'user'=>$r['uname'],
               'section'=>$p['sectionName'] ?? null, 'words'=>$p['wordCount'] ?? null, 'dwellMs'=>$p['dwellMs'] ?? null]; }, $rows);
-    out(['activeUsers10min'=>$active, 'students'=>$users, 'serverTime'=>now(), 'feed'=>$feed]);
+    if ($scope !== null) {
+      $allowed = [];
+      $qs = $db->query('SELECT id, name FROM cc_groups');
+      foreach ($qs as $g) if (in_array((int)$g['id'], $scope, true)) $allowed[$g['name']] = true;
+      $feed = array_values(array_filter($feed, fn($e) => isset($allowed[$e['group']])));
+    }
+    out(['activeUsers10min'=>$active, 'students'=>$users, 'serverTime'=>now(), 'feed'=>$feed, 'scoped'=>$scope !== null]);
   }
   case 't_create_groups': {
     need_coach();
@@ -279,7 +293,7 @@ switch ($a) {
   }
   case 'contract_rounds': {
     $u = need_user(); $gid = (int)($in['group'] ?? 0);
-    if (!is_member((int)$u['id'], $gid) && !is_staff($u)) fail('not allowed', 403);
+    if (!is_member((int)$u['id'], $gid) && !(is_staff($u) && in_scope($u, $gid))) fail('not allowed', 403);
     $st = $db->prepare('SELECT round, MIN(saved_at) AS first_saved, MAX(saved_at) AS last_saved, COUNT(*) AS saves,
                         MAX(version) AS last_version FROM cc_contract_history WHERE group_id = ? GROUP BY round ORDER BY round');
     $st->execute([$gid]);
@@ -334,7 +348,7 @@ switch ($a) {
     out(['version' => $v]);
   }
   case 't_submissions': {
-    need_staff();
+    $u = need_staff(); $scope = coach_scope($u);
     $inst = mb_substr((string)($in['instrument'] ?? ''), 0, 40);
     $sql = 'SELECT s.id, s.user_id, s.group_id, s.instrument, s.state, s.version, s.done, s.updated_at,
                    u.name AS user_name, u.email AS user_email, g.name AS group_name, g.code AS group_code, g.course, g.cohort
@@ -345,6 +359,7 @@ switch ($a) {
     $sql .= ' ORDER BY g.course, g.name, u.name';
     $st = $db->prepare($sql); $st->execute($args);
     $rows = array_map(function($r){ $r['state'] = json_decode($r['state'], true); return $r; }, $st->fetchAll());
+    if ($scope !== null) $rows = array_values(array_filter($rows, fn($r) => in_array((int)$r['group_id'], $scope, true)));
     out(['submissions' => $rows]);
   }
 
@@ -366,6 +381,42 @@ switch ($a) {
     }
     if (!empty($in['dropGroup'])) { $db->prepare('DELETE FROM cc_groups WHERE id = ?')->execute([$gid]); $counts['cc_groups'] = 1; }
     out(['deleted' => $counts, 'code' => $code]);
+  }
+
+  /* ---------------- ADMIN: system overview ---------------- */
+  case 'a_stats': {
+    need_owner();
+    $q = fn($sql) => (int)$db->query($sql)->fetchColumn();
+    out([
+      'schemaVersion' => (string)$db->query("SELECT v FROM cc_meta WHERE k = 'schema_version'")->fetchColumn(),
+      'users' => $q('SELECT COUNT(*) FROM cc_users'),
+      'students' => $q("SELECT COUNT(*) FROM cc_users WHERE role = 'student'"),
+      'coaches' => $q("SELECT COUNT(*) FROM cc_users WHERE role = 'coach'"),
+      'researchers' => $q("SELECT COUNT(*) FROM cc_users WHERE role = 'researcher'"),
+      'groups' => $q('SELECT COUNT(*) FROM cc_groups'),
+      'memberships' => $q('SELECT COUNT(*) FROM cc_memberships'),
+      'contracts' => $q('SELECT COUNT(*) FROM cc_contracts'),
+      'contractSaves' => $q('SELECT COUNT(*) FROM cc_contract_history'),
+      'individualContracts' => $q("SELECT COUNT(*) FROM cc_submissions WHERE instrument = 'individual_contract'"),
+      'events' => $q('SELECT COUNT(*) FROM cc_events'),
+      'sessionNotes' => $q('SELECT COUNT(*) FROM cc_notes'),
+      'serverTime' => now(),
+    ]);
+  }
+
+  /* ---------------- ADMIN: coach assignments ---------------- */
+  case 'a_assign': {
+    need_owner();
+    $gid = (int)($in['group'] ?? 0);
+    $ids = array_values(array_unique(array_map('intval', (array)($in['coaches'] ?? []))));
+    if (!$gid) fail('group required');
+    $db->prepare('DELETE FROM cc_group_coaches WHERE group_id = ?')->execute([$gid]);
+    if ($ids) {
+      $chk = $db->prepare("SELECT COUNT(*) FROM cc_users WHERE id = ? AND role IN ('coach','owner')");
+      $ins = $db->prepare('INSERT INTO cc_group_coaches (group_id, user_id, assigned_at) VALUES (?,?,?)');
+      foreach ($ids as $uid) { $chk->execute([$uid]); if ((int)$chk->fetchColumn()) $ins->execute([$gid, $uid, now()]); }
+    }
+    out(['ok' => true, 'count' => count($ids)]);
   }
 
   default: fail('unknown action', 404);
